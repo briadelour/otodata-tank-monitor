@@ -1,7 +1,7 @@
 {
   "name": "Otodata Tank Monitor",
   "content_in_root": false,
-  "filename": "otodata_tank",
+  "filename": "otodata_tank_monitor",
   "render_readme": true,
   "homeassistant": "2023.8.0"
 }
