@@ -4,9 +4,11 @@
 [![GitHub release](https://img.shields.io/github/release/briadelour/otodata-tank-monitor.svg)](https://github.com/briadelour/otodata-tank-monitor/releases)
 
 Monitor your Otodata propane tank levels directly in Home Assistant. Access your tank data through the Nee-Vo portal by Otodata Network. This is a custom integration that can be installed via HACS.
+
 <div align="center">
 <img width="502" height="494" alt="Otodata Tank Monitor Screenshot" src="https://github.com/user-attachments/assets/d08153cb-b5fd-43ab-8d34-5b74f099cc57" />
 </div>
+
 ## Features
 
 - **Real-time tank level monitoring** - Track your propane tank fill percentage
