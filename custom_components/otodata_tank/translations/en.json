@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Otodata Tank Monitor",
+        "description": "Enter your Nee-Vo portal credentials. The Nee-Vo portal (by Otodata Network) is used to access your Otodata tank monitor data.\n\n**Setting up your Nee-Vo portal account:**\n1. Download the Nee-Vo app: [iOS]({ios_app}) | [Android]({android_app})\n2. Create an account or sign in\n3. Scan the QR code or enter the alpha-numeric code from your Otodata tank monitor device\n4. Register as the home owner (you can register even if you don't own the tank monitor)\n5. Use those same Nee-Vo credentials here\n\n**Optional: Propane Pricing**\nYou can also add a URL to track propane prices in your area from the EIA website. Examples:\n- North Carolina: https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_snc_w.htm\n- Connecticut: https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_SCT_w.htm\n- Ohio: https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_SOH_w.htm\n\nFind your state's URL at: https://www.eia.gov/dnav/pet/pet_pri_wfr_a_EPM0_PRS_dpgal_w.htm",
+        "data": {
+          "username": "Nee-Vo Username",
+          "password": "Nee-Vo Password",
+          "pricing_url": "Propane Pricing URL (Optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Otodata API. Please check your internet connection.",
+      "invalid_auth": "Invalid username or password. Please check your Nee-Vo portal credentials.",
+      "no_devices": "No tank monitors found on your account. Please ensure you have registered an Otodata device in the Nee-Vo app.",
+      "unknown": "Unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  }
+}
