@@ -1,5 +1,5 @@
 {
-  "domain": "otodata_tank",
+  "domain": "otodata_tank_monitor",
   "name": "Otodata Tank Monitor",
   "codeowners": ["@briadelour"],
   "config_flow": true,
