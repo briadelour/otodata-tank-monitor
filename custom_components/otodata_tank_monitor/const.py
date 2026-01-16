@@ -1,6 +1,6 @@
 """Constants for the Otodata Tank Monitor integration."""
 
-DOMAIN = "otodata_tank"
+DOMAIN = "otodata_tank_monitor"
 
 # Configuration
 CONF_USERNAME = "username"

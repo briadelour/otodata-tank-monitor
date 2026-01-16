@@ -235,9 +235,13 @@ class OtodataTankSensor(CoordinatorEntity, SensorEntity):
             # Parse the last reading date
             last_reading = parse_neevo_date(tank_data.get("LastReadingDate"))
             
+            # Get capacity (API returns in liters)
+            capacity_liters = tank_data.get("TankCapacity")
+            
             attrs = {
                 ATTR_LEVEL: tank_data.get("Level"),
-                ATTR_TANK_CAPACITY: tank_data.get("TankCapacity"),
+                ATTR_TANK_CAPACITY: capacity_liters,  # Original from API (liters)
+                "tank_capacity_liters": capacity_liters,  # Explicit liters
                 ATTR_SERIAL_NUMBER: tank_data.get("SerialNumber"),
                 ATTR_CUSTOM_NAME: tank_data.get("CustomName"),
                 ATTR_COMPANY_NAME: tank_data.get("CompanyName"),
@@ -246,6 +250,10 @@ class OtodataTankSensor(CoordinatorEntity, SensorEntity):
                 ATTR_NOTIFY_AT_1: tank_data.get("NotifyAt1"),
                 ATTR_NOTIFY_AT_2: tank_data.get("NotifyAt2"),
             }
+            
+            # Add tank capacity in gallons for clarity
+            if capacity_liters is not None:
+                attrs["tank_capacity_gallons"] = round(capacity_liters / GALLONS_TO_LITERS, 1)
             
             # Add formatted last reading date
             if last_reading:
@@ -393,10 +401,13 @@ class OtodataTankGallonsSensor(CoordinatorEntity, SensorEntity):
         ):
             tank_data = self.coordinator.data["tanks"][self._tank_index]
             level = tank_data.get("Level")
-            capacity = tank_data.get("TankCapacity")
+            capacity_liters = tank_data.get("TankCapacity")  # API returns capacity in liters
             
-            if level is not None and capacity is not None:
-                gallons_remaining = (level / 100) * capacity
+            if level is not None and capacity_liters is not None:
+                # Calculate liters remaining first
+                liters_remaining = (level / 100) * capacity_liters
+                # Convert to gallons
+                gallons_remaining = liters_remaining / GALLONS_TO_LITERS
                 return round(gallons_remaining, 1)
         return None
 
@@ -444,11 +455,11 @@ class OtodataTankLitersSensor(CoordinatorEntity, SensorEntity):
         ):
             tank_data = self.coordinator.data["tanks"][self._tank_index]
             level = tank_data.get("Level")
-            capacity = tank_data.get("TankCapacity")
+            capacity_liters = tank_data.get("TankCapacity")  # API returns capacity in liters
             
-            if level is not None and capacity is not None:
-                gallons_remaining = (level / 100) * capacity
-                liters_remaining = gallons_remaining * GALLONS_TO_LITERS
+            if level is not None and capacity_liters is not None:
+                # Capacity is already in liters, just calculate remaining
+                liters_remaining = (level / 100) * capacity_liters
                 return round(liters_remaining, 1)
         return None
 

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-01-16
+
+### Fixed
+- **CRITICAL BUG**: Fixed incorrect volume calculations. The API returns `TankCapacity` in liters, not gallons. Previous version incorrectly treated capacity as gallons, resulting in calculated values that were 3.78541x too high (e.g., showing 448 gallons instead of 118 gallons for a 320-gallon tank at 37%).
+  - Gallons sensor now correctly converts: `(level / 100) × capacity_liters ÷ 3.78541`
+  - Liters sensor now directly calculates: `(level / 100) × capacity_liters`
+  - Added `tank_capacity_gallons` and `tank_capacity_liters` attributes to main sensor for clarity
+
+### Changed
+- Enhanced main tank sensor attributes to explicitly show capacity in both liters (from API) and gallons (calculated)
+
 ## [1.0.0] - 2026-01-15
 
 ### Added

@@ -5,7 +5,9 @@
 
 Monitor your Otodata propane tank levels directly in Home Assistant. Access your tank data through the Nee-Vo portal by Otodata Network. This is a custom integration that can be installed via HACS.
 
+<div align="center">
 <img width="502" height="494" alt="Otodata Tank Monitor Screenshot" src="https://github.com/user-attachments/assets/d08153cb-b5fd-43ab-8d34-5b74f099cc57" />
+</div>
 
 ## Features
 
@@ -53,10 +55,15 @@ The integration retrieves data from the Otodata API in this format:
 Before installing this integration, you need:
 
 1. **Home Assistant** installed and running (version 2023.8.0 or later)
-2. **A Nee-Vo portal account** with active propane tank monitoring service
-3. **The Nee-Vo mobile app** installed on your phone:
+2. **Otodata Tank Reader** installed and reporting (Model TM5030 used for this development)
+3. **A Nee-Vo portal account** with active propane tank monitoring service
+4. **The Nee-Vo mobile app** installed on your phone:
    - [iOS App](https://apps.apple.com/us/app/nee-vo/id1108454345)
    - [Android App](https://play.google.com/store/apps/details?id=ca.otodata.nee_vo&hl=en_US&pli=1)
+
+<div align="center">
+<img width="256" height="256" alt="icon" src="https://github.com/user-attachments/assets/e142e331-8e46-41b6-9d1c-69177226c0dd" />
+</div>
 
 ## Setting Up Your Otodata Account
 
