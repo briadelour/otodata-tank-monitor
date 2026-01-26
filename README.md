@@ -223,13 +223,19 @@ Each tank level sensor provides these attributes:
 ```yaml
 type: gauge
 entity: sensor.neevo_tank_1
-name: Propane Tank
-min: 0
-max: 100
-severity:
-  green: 50
-  yellow: 25
-  red: 0
+unit: "%"
+segments:
+  - from: 0
+    color: "#db4437"
+  - from: 20
+    color: "#ffa600"
+  - from: 30
+    color: "#43a047"
+  - from: 80
+    color: "#d3d3d3"
+needle: true
+max: 80
+name: Propane Tank (320gal)
 ```
 
 #### Entity Card
@@ -254,6 +260,40 @@ entities:
   - entity: sensor.propane_price
     name: Current Price
 ```
+
+#### Advanced Card
+
+```yaml
+type: vertical-stack
+cards:
+  - type: entities
+    entities:
+      - entity: sensor.neevo_tank_1
+        secondary_info: last-changed
+        name: Propane Tank Level (last changed)
+      - entity: sensor.neevo_tank_1_gallons_remaining
+        secondary_info: last-changed
+      - entity: sensor.neevo_tank_1_liters_remaining
+      - entity: sensor.propane_price
+        secondary_info: last-changed
+      - entity: update.otodata_tank_monitor_update
+        secondary_info: none
+  - type: button
+    tap_action:
+      action: call-service
+      service: homeassistant.reload_config_entry
+      service_data:
+        entry_id: {uuid string}
+    name: Reload Integration
+    icon: mdi:refresh
+    card_mod:
+      style: |
+        ha-card {
+          height: 32px !important;
+          min-height: 32px !important;
+        }
+```
+NOTE: Go to Developer Tools and run homeassistant.reload_config_entry to find the UUID string for update.otodata_tank_monitor_update.
 
 ## Automations
 
