@@ -238,6 +238,24 @@ max: 80
 name: Propane Tank (320gal)
 ```
 
+#### Enchanced Mushroom Card (requires [Mushroom Template](https://github.com/piitaya/lovelace-mushroom/blob/main/docs/cards/template.md))
+
+```yaml
+type: custom:mushroom-template-card
+primary: Propane Tank
+secondary: >-
+  {{ states("sensor.neevo_tank_1") }}% ({{
+  (states("sensor.neevo_tank_1") | float * 320 / 80) | round(0) }} gal)
+icon: mdi:storage-tank
+color: |-
+  {% set level = states('sensor.neevo_tank_1') | float %}
+  {% if level > 50 %}green
+  {% elif level > 30 %}orange
+  {% else %}red
+  {% endif %}
+features_position: bottom
+```
+
 #### Entity Card
 
 ```yaml
