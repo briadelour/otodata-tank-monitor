@@ -148,11 +148,20 @@ class OtodataUpdateCoordinator(DataUpdateCoordinator):
                     pricing_url = self.entry.data.get(CONF_PRICING_URL)
                     if pricing_url:
                         try:
-                            async with async_timeout.timeout(30):
-                                async with self.session.get(pricing_url) as price_response:
+                            eia_headers = {
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                "Accept-Language": "en-US,en;q=0.9",
+                                "Connection": "keep-alive",
+                            }
+                            async with async_timeout.timeout(60):
+                                async with self.session.get(pricing_url, headers=eia_headers) as price_response:
                                     if price_response.status == 200:
                                         price_html = await price_response.text()
                                         result["propane_price"] = self._parse_price_from_html(price_html)
+                                    else:
+                                        _LOGGER.warning("EIA price fetch returned status %s", price_response.status)
+                                        result["propane_price"] = None
                         except Exception as err:
                             _LOGGER.warning("Could not fetch propane price: %s", err)
                             result["propane_price"] = None
@@ -541,18 +550,22 @@ class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_propane_price"
         self._attr_name = "Propane Price"
-        self._attr_native_unit_of_measurement = "$/gal"
+        self._attr_native_unit_of_measurement = "USD/ft³"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:currency-usd"
 
+    # 1 gallon = 0.133681 ft³, so $/gal × 7.48052 = USD/ft³
+    _GAL_TO_FT3 = 7.48052
+
     @property
     def native_value(self) -> float | None:
-        """Return the state of the sensor."""
+        """Return the state of the sensor in USD/ft³, converted from the EIA $/gal price."""
         if self.coordinator.data and "propane_price" in self.coordinator.data:
             price_str = self.coordinator.data["propane_price"]
             if price_str:
                 try:
-                    return float(price_str)
+                    price_per_gal = float(price_str)
+                    return round(price_per_gal * self._GAL_TO_FT3, 4)
                 except (ValueError, TypeError):
                     return None
         return None
