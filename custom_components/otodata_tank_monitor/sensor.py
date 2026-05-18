@@ -172,22 +172,19 @@ class OtodataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     def _parse_price_from_html(self, html: str) -> str | None:
-        """Parse propane price from EIA HTML page."""
+        """Parse propane price from EIA HTML page.
+        
+        Uses the exact same CSS selector as the multiscrape.yaml config:
+        tr.DataRow:nth-child(5) td.Current2
+        """
         try:
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
 
-            # Find all rows in the table, then pick the 5th child (nth-child(5))
-            # which corresponds to the Residential Propane row
-            # Structure: 2 header rows + Heating Oil + Wholesale Oil + Residential Propane
-            tbody = soup.find("tbody")
-            if tbody:
-                rows = tbody.find_all("tr", recursive=False)
-                if len(rows) >= 5:
-                    propane_row = rows[4]  # 0-indexed, so index 4 = nth-child(5)
-                    price_cell = propane_row.find("td", class_="Current2")
-                    if price_cell:
-                        return price_cell.get_text(strip=True)
+            # Use the exact same CSS selector as the working multiscrape.yaml
+            cells = soup.select("tr.DataRow:nth-child(5) td.Current2")
+            if cells:
+                return cells[0].get_text(strip=True)
         except Exception as err:
             _LOGGER.debug("Error parsing propane price: %s", err)
         return None
@@ -569,8 +566,3 @@ class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
                 except (ValueError, TypeError):
                     return None
         return None
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success and self.native_value is not None
