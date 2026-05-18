@@ -159,20 +159,26 @@ class OtodataUpdateCoordinator(DataUpdateCoordinator):
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    def _parse_price_from_html(self, html: str) -> str | None:
-        """Parse propane price from EIA HTML page."""
-        try:
-            # Look for the current price in the third data row
-            import re
-            # This regex looks for price patterns like "$2.45" or "2.45"
-            pattern = r'DataRow.*?Current2.*?\$?([\d.]+)'
-            match = re.search(pattern, html, re.DOTALL)
-            if match:
-                return match.group(1)
-        except Exception as err:
-            _LOGGER.debug("Error parsing propane price: %s", err)
-        return None
+def _parse_price_from_html(self, html: str) -> str | None:
+    """Parse propane price from EIA HTML page."""
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
 
+        # Find all rows in the table, then pick the 5th child (nth-child(5))
+        # which corresponds to the Residential Propane row
+        # Structure: 2 header rows + Heating Oil + Wholesale Oil + Residential Propane
+        tbody = soup.find("tbody")
+        if tbody:
+            rows = tbody.find_all("tr", recursive=False)
+            if len(rows) >= 5:
+                propane_row = rows[4]  # 0-indexed, so index 4 = nth-child(5)
+                price_cell = propane_row.find("td", class_="Current2")
+                if price_cell:
+                    return price_cell.get_text(strip=True)
+    except Exception as err:
+        _LOGGER.debug("Error parsing propane price: %s", err)
+    return None
 
 class OtodataTankSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Neevo Tank level sensor."""
