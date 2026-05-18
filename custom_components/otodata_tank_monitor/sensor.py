@@ -96,6 +96,9 @@ async def async_setup_entry(
             # Liters remaining sensor
             entities.append(OtodataTankLitersSensor(coordinator, entry, idx))
             
+            # Cubic feet remaining sensor (for energy dashboard)
+            entities.append(OtodataTankCubicFeetSensor(coordinator, entry, idx))
+            
             # Tank pressure sensor (if available)
             if tank_data.get("TankLastPressure") is not None:
                 entities.append(OtodataTankPressureSensor(coordinator, entry, idx))
@@ -393,8 +396,7 @@ class OtodataTankGallonsSensor(CoordinatorEntity, SensorEntity):
         
         self._attr_unique_id = f"{entry.entry_id}_gallons_{tank_id}"
         self._attr_name = f"{tank_name} Gallons Remaining"
-        self._attr_device_class = SensorDeviceClass.GAS
-        self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfVolume.GALLONS
         self._attr_icon = "mdi:gauge"
 
@@ -471,6 +473,61 @@ class OtodataTankLitersSensor(CoordinatorEntity, SensorEntity):
                 return round(liters_remaining, 1)
         return None
 
+
+
+class OtodataTankCubicFeetSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Neevo Tank cubic feet remaining sensor (energy dashboard compatible)."""
+
+    LITERS_TO_CUBIC_FEET = 0.0353147
+
+    def __init__(
+        self,
+        coordinator: OtodataUpdateCoordinator,
+        entry: ConfigEntry,
+        tank_index: int,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._tank_index = tank_index
+
+        # Get tank ID and name
+        tank_id = "unknown"
+        tank_name = f"Tank {tank_index + 1}"
+        if (
+            coordinator.data
+            and "tanks" in coordinator.data
+            and len(coordinator.data["tanks"]) > tank_index
+        ):
+            tank_data = coordinator.data["tanks"][tank_index]
+            tank_id = tank_data.get("Id", "unknown")
+            custom_name = tank_data.get("CustomName")
+            if custom_name:
+                tank_name = custom_name
+
+        self._attr_unique_id = f"{entry.entry_id}_cubic_feet_{tank_id}"
+        self._attr_name = f"{tank_name} Cubic Feet Remaining"
+        self._attr_device_class = SensorDeviceClass.GAS
+        self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_FEET
+        self._attr_icon = "mdi:gauge"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state of the sensor."""
+        if (
+            self.coordinator.data
+            and "tanks" in self.coordinator.data
+            and len(self.coordinator.data["tanks"]) > self._tank_index
+        ):
+            tank_data = self.coordinator.data["tanks"][self._tank_index]
+            level = tank_data.get("Level")
+            capacity_liters = tank_data.get("TankCapacity")  # API returns capacity in liters
+
+            if level is not None and capacity_liters is not None:
+                liters_remaining = (level / 100) * capacity_liters
+                cubic_feet_remaining = liters_remaining * self.LITERS_TO_CUBIC_FEET
+                return round(cubic_feet_remaining, 2)
+        return None
 
 class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Neevo Propane Price sensor."""
