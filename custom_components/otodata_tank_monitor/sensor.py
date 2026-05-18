@@ -393,7 +393,8 @@ class OtodataTankGallonsSensor(CoordinatorEntity, SensorEntity):
         
         self._attr_unique_id = f"{entry.entry_id}_gallons_{tank_id}"
         self._attr_name = f"{tank_name} Gallons Remaining"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_class = SensorDeviceClass.GAS
+        self._attr_state_class = SensorStateClass.TOTAL
         self._attr_native_unit_of_measurement = UnitOfVolume.GALLONS
         self._attr_icon = "mdi:gauge"
 
@@ -447,7 +448,8 @@ class OtodataTankLitersSensor(CoordinatorEntity, SensorEntity):
         
         self._attr_unique_id = f"{entry.entry_id}_liters_{tank_id}"
         self._attr_name = f"{tank_name} Liters Remaining"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_class = SensorDeviceClass.GAS
+        self._attr_state_class = SensorStateClass.TOTAL
         self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_icon = "mdi:gauge"
 
