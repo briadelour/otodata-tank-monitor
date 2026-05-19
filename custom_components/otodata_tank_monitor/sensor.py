@@ -13,10 +13,11 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
+    RestoreSensor,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfPressure, UnitOfVolume
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -98,6 +99,9 @@ async def async_setup_entry(
             
             # Cubic feet remaining sensor (for energy dashboard)
             entities.append(OtodataTankCubicFeetSensor(coordinator, entry, idx))
+
+            # Gas consumption sensor (for energy dashboard - tracks cumulative usage)
+            entities.append(OtodataTankConsumptionSensor(coordinator, entry, idx))
             
             # Tank pressure sensor (if available)
             if tank_data.get("TankLastPressure") is not None:
@@ -534,6 +538,129 @@ class OtodataTankCubicFeetSensor(CoordinatorEntity, SensorEntity):
                 cubic_feet_remaining = liters_remaining * self.LITERS_TO_CUBIC_FEET
                 return round(cubic_feet_remaining, 2)
         return None
+
+
+class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
+    """Tracks cumulative propane consumption in ft³ for the HA energy dashboard.
+
+    On each coordinator update, if the tank volume has decreased, the delta is
+    added to a running total. Increases (deliveries) are ignored. The total is
+    persisted across HA restarts via RestoreSensor, and resets to zero on a
+    fresh install.
+    """
+
+    LITERS_TO_CUBIC_FEET = 0.0353147
+    # Ignore tiny fluctuations smaller than this (sensor noise / rounding)
+    MIN_DELTA_FT3 = 0.01
+
+    def __init__(
+        self,
+        coordinator: OtodataUpdateCoordinator,
+        entry: ConfigEntry,
+        tank_index: int,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._tank_index = tank_index
+        self._cumulative_consumption: float = 0.0
+        self._previous_volume_ft3: float | None = None
+
+        tank_id = "unknown"
+        tank_name = f"Tank {tank_index + 1}"
+        if (
+            coordinator.data
+            and "tanks" in coordinator.data
+            and len(coordinator.data["tanks"]) > tank_index
+        ):
+            tank_data = coordinator.data["tanks"][tank_index]
+            tank_id = tank_data.get("Id", "unknown")
+            custom_name = tank_data.get("CustomName")
+            if custom_name:
+                tank_name = custom_name
+
+        self._attr_unique_id = f"{entry.entry_id}_consumption_{tank_id}"
+        self._attr_name = f"{tank_name} Gas Consumption"
+        self._attr_device_class = SensorDeviceClass.GAS
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_FEET
+        self._attr_icon = "mdi:fire"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore state and previous volume on HA startup."""
+        await super().async_added_to_hass()
+
+        # Restore cumulative consumption total
+        last_sensor_data = await self.async_get_last_sensor_data()
+        if last_sensor_data and last_sensor_data.native_value is not None:
+            try:
+                self._cumulative_consumption = float(last_sensor_data.native_value)
+                _LOGGER.debug(
+                    "Restored consumption total: %.3f ft³", self._cumulative_consumption
+                )
+            except (ValueError, TypeError):
+                self._cumulative_consumption = 0.0
+
+        # Restore previous volume so first update calculates delta correctly
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.attributes.get("previous_volume_ft3") is not None:
+            try:
+                self._previous_volume_ft3 = float(
+                    last_state.attributes["previous_volume_ft3"]
+                )
+            except (ValueError, TypeError):
+                self._previous_volume_ft3 = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Calculate consumption delta on each coordinator update."""
+        current_volume = self._get_current_volume_ft3()
+
+        if current_volume is not None:
+            if self._previous_volume_ft3 is not None:
+                delta = self._previous_volume_ft3 - current_volume
+                if delta > self.MIN_DELTA_FT3:
+                    # Tank went down — record consumption
+                    self._cumulative_consumption = round(
+                        self._cumulative_consumption + delta, 3
+                    )
+                    _LOGGER.debug(
+                        "Propane consumed: %.3f ft³ | Total: %.3f ft³",
+                        delta,
+                        self._cumulative_consumption,
+                    )
+                elif delta < -self.MIN_DELTA_FT3:
+                    # Tank went up — delivery detected, ignore for consumption
+                    _LOGGER.debug(
+                        "Delivery detected: volume increased by %.3f ft³", abs(delta)
+                    )
+            self._previous_volume_ft3 = current_volume
+
+        self.async_write_ha_state()
+
+    def _get_current_volume_ft3(self) -> float | None:
+        """Return current tank volume in ft³."""
+        if (
+            self.coordinator.data
+            and "tanks" in self.coordinator.data
+            and len(self.coordinator.data["tanks"]) > self._tank_index
+        ):
+            tank_data = self.coordinator.data["tanks"][self._tank_index]
+            level = tank_data.get("Level")
+            capacity_liters = tank_data.get("TankCapacity")
+            if level is not None and capacity_liters is not None:
+                liters_remaining = (level / 100) * capacity_liters
+                return round(liters_remaining * self.LITERS_TO_CUBIC_FEET, 3)
+        return None
+
+    @property
+    def native_value(self) -> float:
+        """Return cumulative gas consumption in ft³."""
+        return self._cumulative_consumption
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose previous volume so it can be restored on restart."""
+        return {"previous_volume_ft3": self._previous_volume_ft3}
 
 class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Neevo Propane Price sensor."""
