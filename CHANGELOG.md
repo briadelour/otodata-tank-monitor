@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-14
+
+Major release: adds proper Energy dashboard support and fixes several issues found while testing with a refilled tank. Requires Home Assistant 2024.11.0 or later.
+
+### Added
+- **Gas Consumption sensor** (`<tank> Gas Consumption`): cumulative propane used, in ft³ (liquid volume), for the Energy dashboard. Tank volume decreases are added to the total; increases (deliveries) are ignored. Survives restarts.
+- **Cubic Feet Remaining sensor** (informational).
+- **Configurable update interval** under the integration's **Configure** button (15 to 1440 minutes, default 1440).
+- **Propane Price** attributes `price_per_gallon` and `price_is_stale`.
+- **ENERGY_DASHBOARD.md**: setup guide, unit explanation, limitations for tanks that are refilled by delivery, and troubleshooting.
+
+### Changed (breaking)
+- **Gallons, Liters and Cubic Feet Remaining** now use device class `volume_storage` and state class `measurement` (were `gas`/`total` for liters and cubic feet). They no longer appear in the Energy dashboard gas picker, which previously let users select a falling value and see negative usage. Home Assistant may flag their old statistics; use **Developer Tools → Statistics → Fix issue**. If one was your Energy gas source, switch to **Gas Consumption**.
+- **Liters Remaining** now displays in liters. It was shown in ft³ on US unit systems because of the old `gas` device class.
+- Minimum Home Assistant version is now 2024.11.0 (options flow API).
+
+### Fixed
+- **Propane Price** now finds the "Residential Propane" row by label instead of a fixed row position, falls back to the old position, and rejects non-numeric values such as `NA`.
+- **Propane Price** keeps the last good price (and restores it after a restart) when EIA has no fresh value, instead of becoming `unknown` and dropping Energy cost to $0. EIA publishes weekly only October through March.
+- Declared the `beautifulsoup4` requirement in `manifest.json`. Without it the price could silently stay `unknown`.
+- Setup form now shows "invalid username or password" and "no devices found" instead of always reporting a connection error.
+- The EIA price fetch no longer runs inside the Otodata request's 30-second timeout, and price parsing no longer blocks the event loop.
+- `strings.json` was empty; it now matches `translations/en.json`.
+- Documentation: corrected entity IDs, capacity units (the API reports liters), the price unit (USD/ft³), install paths (`otodata_tank_monitor`), and the Mushroom card gallons formula.
+
+### Known limitations
+- Usage is stamped with the time of the poll, not the time propane was burned.
+- If propane is used and a delivery arrives between two polls, the two changes net out and a little usage is not counted.
+- Tank level is reported in whole percent, so 1% of tank capacity is the smallest step.
+
 ## [1.1.1] - 2026-01-16
 
 ### Fixed
@@ -86,13 +116,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 - Support for additional states' propane pricing
 - Historical data tracking
-- Custom update intervals
 - Multiple account support
 - Advanced alerting options
-- Integration with Home Assistant Energy dashboard
+- Delivery detection sensor/event
 
 ---
 
 ## Version History
 
+- **2.0.0** - Energy dashboard support, configurable update interval, price and setup fixes
+- **1.1.1** - Fixed volume calculations (API capacity is in liters)
 - **1.0.0** - Initial HACS-compatible release

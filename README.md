@@ -11,11 +11,12 @@ Monitor your Otodata propane tank levels directly in Home Assistant. Access your
 
 ## Features
 
-- **Real-time tank level monitoring** - Track your propane tank fill percentage
-- **Automatic daily updates** - Sensor updates every 24 hours
+- **Tank level monitoring** - Track your propane tank fill percentage and volume remaining
+- **Energy dashboard support** - A cumulative `Gas Consumption` sensor that ignores deliveries (see [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md))
+- **Configurable updates** - Default every 24 hours; adjustable under the integration's **Configure** button
 - **Multiple tank support** - Monitor multiple propane tanks from one account
 - **Historical data** - Access last reading date and tank capacity information
-- **Optional propane pricing** - Track local propane prices from EIA data
+- **Optional propane pricing** - Track EIA state-average residential propane prices (used for Energy dashboard cost)
 - **Pressure monitoring** - Tank pressure sensor with automatic kPa to PSI conversion
 - **Custom tank names** - Uses your custom names from the Nee-Vo mobile app
 - **Alert thresholds** - View your configured notification levels
@@ -54,7 +55,7 @@ The integration retrieves data from the Otodata API in this format:
 
 Before installing this integration, you need:
 
-1. **Home Assistant** installed and running (version 2023.8.0 or later)
+1. **Home Assistant** installed and running (version 2024.11.0 or later)
 2. **Otodata Tank Reader** installed and reporting (Model TM5030 used for this development)
 3. **A Nee-Vo portal account** with active propane tank monitoring service
 4. **The Nee-Vo mobile app** installed on your phone:
@@ -93,7 +94,7 @@ If you haven't already set up your Nee-Vo portal account:
 ### Manual Installation
 
 1. Download the latest release from the [releases page](https://github.com/briadelour/otodata-tank-monitor/releases)
-2. Extract the `custom_components/neevo` folder to your Home Assistant `custom_components` directory
+2. Extract the `custom_components/otodata_tank_monitor` folder to your Home Assistant `custom_components` directory
 3. Restart Home Assistant
 
 ## Configuration
@@ -156,37 +157,23 @@ The URL pattern is: `https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_S[STATE]_w.ht
 
 ### Available Sensors
 
-Once configured, the integration creates the following sensors:
+> **Entity IDs depend on your tank name.** If you set a custom name in the Nee-Vo app (for example "Amerigas propane"), entity IDs are built from it (`sensor.amerigas_propane`, `sensor.amerigas_propane_gas_consumption`). With no custom name, the level sensor is `sensor.neevo_tank_1` and the others use `Tank 1` (`sensor.tank_1_gallons_remaining`, `sensor.tank_1_gas_consumption`). Examples below use the no-custom-name form; substitute your own IDs.
 
-#### Tank Level Sensors
-- **Entity ID:** `sensor.neevo_tank_1`, `sensor.neevo_tank_2`, etc.
-- **State:** Current tank fill percentage (0-100)
-- **Unit:** %
-- **Name:** Uses your custom tank name from the Nee-Vo app if available
+| Sensor | Unit | What it is | Use for |
+|---|---|---|---|
+| **Tank level** (`sensor.neevo_tank_1`) | % | Fill percentage of the tank's *total* capacity | Gauges, alerts |
+| **Gallons Remaining** | gal | Level % × capacity | Gauges, alerts |
+| **Liters Remaining** | L | Level % × capacity | Gauges (metric) |
+| **Cubic Feet Remaining** | ft³ | Liquid volume remaining (informational) | Reference only |
+| **Gas Consumption** | ft³ | Running total of propane used. Deliveries are ignored | **Energy dashboard** |
+| **Pressure** (if reported) | PSI | Tank pressure, converted from kPa | Monitoring |
+| **Propane Price** (if configured) | USD/ft³ | EIA state average × 7.48052 (see attributes for $/gal) | Energy dashboard cost |
 
-#### Tank Volume Sensors
-- **Gallons Remaining:**
-  - **Entity ID:** `sensor.neevo_tank_1_gallons_remaining`, `sensor.neevo_tank_2_gallons_remaining`, etc.
-  - **State:** Actual gallons remaining in tank
-  - **Unit:** gal
-  - **Calculated from:** Level % × Tank Capacity
+**Energy dashboard:** use *Gas Consumption* only. The *Remaining* sensors go down as you use propane and would show negative usage. See [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md) for setup, units, and what to expect.
 
-- **Liters Remaining:**
-  - **Entity ID:** `sensor.neevo_tank_1_liters_remaining`, `sensor.neevo_tank_2_liters_remaining`, etc.
-  - **State:** Actual liters remaining in tank
-  - **Unit:** L
-  - **Calculated from:** Gallons × 3.78541
+**Gas Consumption details:** each time the integration polls, a drop in tank volume is added to the total and a rise (a delivery) is ignored. The total survives restarts and starts at 0 on a new install. Its `previous_volume_ft3` attribute is how it remembers the last reading, so don't edit it.
 
-#### Tank Pressure Sensors (if available)
-- **Entity ID:** `sensor.neevo_tank_1_pressure`, `sensor.neevo_tank_2_pressure`, etc.
-- **State:** Current tank pressure
-- **Unit:** PSI (automatically converted from kPa for Canadian tanks)
-- **Note:** Only created for tanks that report pressure data
-
-#### Propane Price Sensor (if configured)
-- **Entity ID:** `sensor.propane_price`
-- **State:** Current propane price per gallon
-- **Unit:** $/gal
+**Propane Price details:** the price is converted from EIA's $/gal. Attributes: `price_per_gallon`, and `price_is_stale` (true when EIA has no fresh value and the last good price is being reused, which can happen outside the October-March weekly reporting season).
 
 ### Sensor Attributes
 
@@ -194,7 +181,8 @@ Each tank level sensor provides these attributes:
 
 **Basic Information:**
 - **level** - Current tank fill percentage
-- **tank_capacity** - Total capacity of your propane tank (in gallons)
+- **tank_capacity** / **tank_capacity_liters** - Total capacity as reported by the API, in **liters** (1211.2 for a 320 gal tank)
+- **tank_capacity_gallons** - Total capacity in gallons (use this one in templates)
 - **last_reading_date** - Timestamp of the last sensor reading from the tank monitor (ISO format)
 - **serial_number** - Tank monitor serial number
 
@@ -214,7 +202,7 @@ Each tank level sensor provides these attributes:
 - **tank_pressure_psi** - Pressure converted to PSI (for kPa tanks)
 
 **Pricing** (if configured):
-- **propane_price** - Current propane price from EIA
+- **propane_price** - Latest EIA residential propane price in $/gal (raw value from the EIA page)
 
 ### Dashboard Examples
 
@@ -245,7 +233,7 @@ type: custom:mushroom-template-card
 primary: Propane Tank
 secondary: >-
   {{ states("sensor.neevo_tank_1") }}% ({{
-  (states("sensor.neevo_tank_1") | float * 320 / 80) | round(0) }} gal)
+  states("sensor.tank_1_gallons_remaining") | float(0) | round(0) }} gal)
 icon: mdi:storage-tank
 color: |-
   {% set level = states('sensor.neevo_tank_1') | float %}
@@ -263,9 +251,9 @@ type: entities
 entities:
   - entity: sensor.neevo_tank_1
     name: Tank Level
-  - entity: sensor.neevo_tank_1_gallons_remaining
+  - entity: sensor.tank_1_gallons_remaining
     name: Gallons Remaining
-  - entity: sensor.neevo_tank_1_liters_remaining
+  - entity: sensor.tank_1_liters_remaining
     name: Liters Remaining
   - type: attribute
     entity: sensor.neevo_tank_1
@@ -273,8 +261,8 @@ entities:
     name: Last Reading
   - type: attribute
     entity: sensor.neevo_tank_1
-    attribute: tank_capacity
-    name: Tank Capacity
+    attribute: tank_capacity_gallons
+    name: Tank Capacity (gal)
   - entity: sensor.propane_price
     name: Current Price
 ```
@@ -289,9 +277,9 @@ cards:
       - entity: sensor.neevo_tank_1
         secondary_info: last-changed
         name: Propane Tank Level (last changed)
-      - entity: sensor.neevo_tank_1_gallons_remaining
+      - entity: sensor.tank_1_gallons_remaining
         secondary_info: last-changed
-      - entity: sensor.neevo_tank_1_liters_remaining
+      - entity: sensor.tank_1_liters_remaining
       - entity: sensor.propane_price
         secondary_info: last-changed
       - entity: update.otodata_tank_monitor_update
@@ -312,6 +300,19 @@ cards:
         }
 ```
 NOTE: Go to Developer Tools and run homeassistant.reload_config_entry to find the UUID string for update.otodata_tank_monitor_update.
+
+## Energy Dashboard
+
+Add **Gas Consumption** as the gas source and **Propane Price** (or a static price) for cost. Full guide, including units, limitations for refilled tanks, and troubleshooting: [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md).
+
+## Upgrading from 1.x to 2.0.0
+
+Version 2.0.0 requires Home Assistant 2024.11.0 or later. See the [CHANGELOG](CHANGELOG.md) for everything that changed. The ones that may affect you:
+
+- **Liters / Cubic Feet / Gallons Remaining** changed device class (to volume storage) and state class (to measurement), so they no longer appear in the Energy dashboard picker. Home Assistant may show a statistics warning for them: go to **Developer Tools** → **Statistics** and use **Fix issue**, choosing to delete the old statistics. If you had one of these selected as your Energy gas source, switch to **Gas Consumption**.
+- **Liters Remaining** now shows liters. Before, Home Assistant displayed it in ft³ for US unit systems.
+- **Propane Price** unit is unchanged (USD/ft³). The price is now kept through EIA gaps instead of becoming `unknown`.
+- Entity IDs and unique IDs are unchanged.
 
 ## Automations
 
@@ -352,7 +353,7 @@ automation:
         data:
           title: "Propane Price Update"
           message: >
-            Current propane price: ${{ states('sensor.propane_price') }}/gal
+            Current propane price: ${{ state_attr('sensor.propane_price', 'price_per_gallon') }}/gal
             Tank level: {{ states('sensor.neevo_tank_1') }}%
 ```
 
@@ -378,7 +379,7 @@ If you have multiple tanks, the integration will create a sensor for each tank. 
 
 ### Sensor Not Updating
 
-- The sensor updates every 24 hours by default
+- The sensor updates every 24 hours by default. Change this under **Settings** → **Devices & Services** → **Otodata Tank Monitor** → **Configure** (15 to 1440 minutes)
 - You can force an update by reloading the integration: **Settings** → **Devices & Services** → **Otodata** → **⋮** → **Reload**
 - Check the `last_reading_date` attribute to see when Otodata last received data from your tank monitor
 
@@ -387,14 +388,15 @@ If you have multiple tanks, the integration will create a sensor for each tank. 
 1. Verify the pricing URL is correct for your state
 2. Check that the URL loads in your web browser
 3. The EIA website may be temporarily unavailable
-4. Price updates once per day, so it may take 24 hours for the first reading
+4. EIA reports propane weekly from October through March and monthly the rest of the year, and some periods have no value. The integration keeps the last good price and sets `price_is_stale: true` on the sensor
+5. A fresh install needs one successful poll before a price appears
+6. For exact costs, skip the EIA price and use a static price in the Energy dashboard (your price per gallon × 7.48 = price per ft³)
 
 ## Update Frequency
 
-- **Tank levels:** Updates every 24 hours (1440 minutes)
-- **Propane prices:** Updates every 24 hours (when configured)
+- **Tank levels and prices:** every 24 hours (1440 minutes) by default, adjustable from 15 to 1440 minutes under **Configure**. The schedule starts when Home Assistant starts or the integration is reloaded.
 
-This update schedule is designed to minimize API calls while providing timely information. The Otodata tank monitors themselves typically report data every 6-24 hours depending on the model and settings.
+The Otodata tank monitors themselves typically report every 6-24 hours depending on model and settings, so polling much faster than hourly rarely helps. Energy dashboard usage is stamped with the time the integration *polled*, not the time the propane was burned.
 
 ## Support
 
