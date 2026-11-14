@@ -1,13 +1,14 @@
 """Support for Otodata Tank Monitor sensors."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 import logging
 import re
 from typing import Any
 
 import aiohttp
-import async_timeout
+from bs4 import BeautifulSoup
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -31,6 +32,7 @@ from .const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_PRICING_URL,
+    CONF_SCAN_INTERVAL,
     API_URL,
     API_TIMEOUT,
     DEFAULT_SCAN_INTERVAL,
@@ -52,8 +54,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-SCAN_INTERVAL = timedelta(minutes=DEFAULT_SCAN_INTERVAL)
 
 
 def parse_neevo_date(date_str: str | None) -> datetime | None:
@@ -97,10 +97,10 @@ async def async_setup_entry(
             # Liters remaining sensor
             entities.append(OtodataTankLitersSensor(coordinator, entry, idx))
             
-            # Cubic feet remaining sensor (for energy dashboard)
+            # Cubic feet remaining sensor (informational, liquid volume)
             entities.append(OtodataTankCubicFeetSensor(coordinator, entry, idx))
 
-            # Gas consumption sensor (for energy dashboard - tracks cumulative usage)
+            # Gas consumption sensor - use THIS one for the Energy dashboard
             entities.append(OtodataTankConsumptionSensor(coordinator, entry, idx))
             
             # Tank pressure sensor (if available)
@@ -126,72 +126,97 @@ class OtodataUpdateCoordinator(DataUpdateCoordinator):
             entry.data[CONF_PASSWORD],
         )
 
+        scan_minutes = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=timedelta(minutes=scan_minutes),
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Update data via library."""
+        """Fetch tank data (and the optional EIA price) from the cloud."""
         try:
-            async with async_timeout.timeout(API_TIMEOUT):
-                async with self.session.get(
-                    API_URL,
-                    auth=self.auth,
-                ) as response:
+            async with asyncio.timeout(API_TIMEOUT):
+                async with self.session.get(API_URL, auth=self.auth) as response:
                     if response.status != 200:
-                        raise UpdateFailed(f"Error communicating with API: {response.status}")
-                    
+                        raise UpdateFailed(
+                            f"Error communicating with API: {response.status}"
+                        )
                     tanks_data = await response.json()
-                    
-                    result = {"tanks": tanks_data}
-                    
-                    # Fetch propane price if URL is configured
-                    pricing_url = self.entry.data.get(CONF_PRICING_URL)
-                    if pricing_url:
-                        try:
-                            eia_headers = {
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                                "Accept-Language": "en-US,en;q=0.9",
-                                "Connection": "keep-alive",
-                            }
-                            async with async_timeout.timeout(60):
-                                async with self.session.get(pricing_url, headers=eia_headers) as price_response:
-                                    if price_response.status == 200:
-                                        price_html = await price_response.text()
-                                        result["propane_price"] = self._parse_price_from_html(price_html)
-                                    else:
-                                        _LOGGER.warning("EIA price fetch returned status %s", price_response.status)
-                                        result["propane_price"] = None
-                        except Exception as err:
-                            _LOGGER.warning("Could not fetch propane price: %s", err)
-                            result["propane_price"] = None
-                    
-                    return result
-
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    def _parse_price_from_html(self, html: str) -> str | None:
-        """Parse propane price from EIA HTML page.
-        
-        Uses the exact same CSS selector as the multiscrape.yaml config:
-        tr.DataRow:nth-child(5) td.Current2
+        result: dict[str, Any] = {"tanks": tanks_data}
+
+        pricing_url = self.entry.data.get(CONF_PRICING_URL)
+        if pricing_url:
+            result["propane_price"] = await self._async_fetch_price(pricing_url)
+
+        return result
+
+    async def _async_fetch_price(self, pricing_url: str) -> str | None:
+        """Fetch the EIA page and return the residential propane price ($/gal)."""
+        eia_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        try:
+            async with asyncio.timeout(60):
+                async with self.session.get(
+                    pricing_url, headers=eia_headers
+                ) as price_response:
+                    if price_response.status != 200:
+                        _LOGGER.warning(
+                            "EIA price fetch returned status %s", price_response.status
+                        )
+                        return None
+                    price_html = await price_response.text()
+        except (aiohttp.ClientError, TimeoutError) as err:
+            _LOGGER.warning("Could not fetch propane price: %s", err)
+            return None
+
+        # Parsing is CPU-bound; keep it off the event loop.
+        return await self.hass.async_add_executor_job(
+            self._parse_price_from_html, price_html
+        )
+
+    @staticmethod
+    def _parse_price_from_html(html: str) -> str | None:
+        """Parse the residential propane price ($/gal) from an EIA state page.
+
+        The row is found by its "Residential Propane" label so a change in row
+        order does not break it. If the label is not found, fall back to the
+        original positional selector (5th data row, "Current2" cell).
+        EIA publishes weekly Oct-Mar and monthly otherwise, and some periods
+        have no value ("NA"); those return None.
         """
         try:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
 
-            # Use the exact same CSS selector as the working multiscrape.yaml
-            cells = soup.select("tr.DataRow:nth-child(5) td.Current2")
-            if cells:
-                return cells[0].get_text(strip=True)
-        except Exception as err:
-            _LOGGER.debug("Error parsing propane price: %s", err)
+            candidates = []
+            for row in soup.select("tr.DataRow"):
+                label = row.get_text(" ", strip=True).lower()
+                if "residential propane" in label:
+                    candidates = row.select("td.Current2")
+                    break
+
+            if not candidates:
+                candidates = soup.select("tr.DataRow:nth-child(5) td.Current2")
+
+            if candidates:
+                text = candidates[0].get_text(strip=True)
+                float(text)  # reject "NA", "--", blanks
+                return text
+        except (ValueError, AttributeError) as err:
+            _LOGGER.debug("Could not parse propane price: %s", err)
         return None
+
 
 class OtodataTankSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Neevo Tank level sensor."""
@@ -406,6 +431,7 @@ class OtodataTankGallonsSensor(CoordinatorEntity, SensorEntity):
         
         self._attr_unique_id = f"{entry.entry_id}_gallons_{tank_id}"
         self._attr_name = f"{tank_name} Gallons Remaining"
+        self._attr_device_class = SensorDeviceClass.VOLUME_STORAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfVolume.GALLONS
         self._attr_icon = "mdi:gauge"
@@ -460,8 +486,10 @@ class OtodataTankLitersSensor(CoordinatorEntity, SensorEntity):
         
         self._attr_unique_id = f"{entry.entry_id}_liters_{tank_id}"
         self._attr_name = f"{tank_name} Liters Remaining"
-        self._attr_device_class = SensorDeviceClass.GAS
-        self._attr_state_class = SensorStateClass.TOTAL
+        # VOLUME_STORAGE + MEASUREMENT keeps this out of the Energy dashboard
+        # gas picker. Use "Gas Consumption" for Energy instead.
+        self._attr_device_class = SensorDeviceClass.VOLUME_STORAGE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_icon = "mdi:gauge"
 
@@ -486,7 +514,11 @@ class OtodataTankLitersSensor(CoordinatorEntity, SensorEntity):
 
 
 class OtodataTankCubicFeetSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Neevo Tank cubic feet remaining sensor (energy dashboard compatible)."""
+    """Tank volume remaining in ft³ (liquid volume). Informational only.
+
+    This value goes DOWN as propane is used, so do not use it as the Energy
+    dashboard gas source. Use the Gas Consumption sensor.
+    """
 
     LITERS_TO_CUBIC_FEET = 0.0353147
 
@@ -516,8 +548,10 @@ class OtodataTankCubicFeetSensor(CoordinatorEntity, SensorEntity):
 
         self._attr_unique_id = f"{entry.entry_id}_cubic_feet_{tank_id}"
         self._attr_name = f"{tank_name} Cubic Feet Remaining"
-        self._attr_device_class = SensorDeviceClass.GAS
-        self._attr_state_class = SensorStateClass.TOTAL
+        # VOLUME_STORAGE + MEASUREMENT keeps this out of the Energy dashboard
+        # gas picker. Use "Gas Consumption" for Energy instead.
+        self._attr_device_class = SensorDeviceClass.VOLUME_STORAGE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_FEET
         self._attr_icon = "mdi:gauge"
 
@@ -662,8 +696,17 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
         """Expose previous volume so it can be restored on restart."""
         return {"previous_volume_ft3": self._previous_volume_ft3}
 
-class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Neevo Propane Price sensor."""
+class OtodataPropanePriceSensor(CoordinatorEntity, RestoreSensor):
+    """Residential propane price from EIA, expressed in USD/ft³.
+
+    EIA publishes weekly Oct-Mar and monthly otherwise, and some periods have
+    no value. When no fresh price is available the last good price is kept
+    (and restored after a restart) so Energy dashboard cost keeps working.
+    The ``price_is_stale`` attribute is true while an old price is in use.
+    """
+
+    # 1 gallon = 0.133681 ft³, so $/gal × 7.48052 = USD/ft³
+    _GAL_TO_FT3 = 7.48052
 
     def __init__(
         self,
@@ -677,19 +720,54 @@ class OtodataPropanePriceSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_unit_of_measurement = "USD/ft³"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:currency-usd"
+        self._last_value: float | None = self._compute_value()
+        self._is_stale = False
 
-    # 1 gallon = 0.133681 ft³, so $/gal × 7.48052 = USD/ft³
-    _GAL_TO_FT3 = 7.48052
+    async def async_added_to_hass(self) -> None:
+        """Restore the last price if no fresh price is available yet."""
+        await super().async_added_to_hass()
+        if self._last_value is None:
+            last_data = await self.async_get_last_sensor_data()
+            if last_data and last_data.native_value is not None:
+                try:
+                    self._last_value = float(last_data.native_value)
+                    self._is_stale = True
+                except (ValueError, TypeError):
+                    self._last_value = None
 
-    @property
-    def native_value(self) -> float | None:
-        """Return the state of the sensor in USD/ft³, converted from the EIA $/gal price."""
+    def _compute_value(self) -> float | None:
+        """Convert the EIA $/gal price to USD/ft³, or None if unavailable."""
         if self.coordinator.data and "propane_price" in self.coordinator.data:
             price_str = self.coordinator.data["propane_price"]
             if price_str:
                 try:
-                    price_per_gal = float(price_str)
-                    return round(price_per_gal * self._GAL_TO_FT3, 4)
+                    return round(float(price_str) * self._GAL_TO_FT3, 4)
                 except (ValueError, TypeError):
                     return None
         return None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Keep the newest good price; flag it stale if only an old one exists."""
+        value = self._compute_value()
+        if value is not None:
+            self._last_value = value
+            self._is_stale = False
+        else:
+            self._is_stale = self._last_value is not None
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the price in USD/ft³."""
+        return self._last_value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the per-gallon price and whether it is stale."""
+        per_gallon = (
+            round(self._last_value / self._GAL_TO_FT3, 4)
+            if self._last_value is not None
+            else None
+        )
+        return {"price_per_gallon": per_gallon, "price_is_stale": self._is_stale}

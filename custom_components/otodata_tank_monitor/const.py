@@ -6,6 +6,8 @@ DOMAIN = "otodata_tank_monitor"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_PRICING_URL = "pricing_url"
+# Options (set from the integration's "Configure" button)
+CONF_SCAN_INTERVAL = "scan_interval"  # minutes
 
 # API
 API_URL = "https://ws.otodatanetwork.com/neevoapp/v1/DataService.svc/GetAllDisplayPropaneDevices"
@@ -13,11 +15,15 @@ API_TIMEOUT = 30
 
 # Defaults
 DEFAULT_SCAN_INTERVAL = 1440  # 24 hours in minutes
+MIN_SCAN_INTERVAL = 15  # minutes
+MAX_SCAN_INTERVAL = 1440  # minutes
 DEFAULT_NAME = "Otodata Tank"
 
 # Conversion factors
 KPA_TO_PSI = 0.145038  # 1 kPa = 0.145038 PSI
 GALLONS_TO_LITERS = 3.78541  # 1 gallon = 3.78541 liters
+LITERS_TO_CUBIC_FEET = 0.0353147  # liquid volume, not gas vapor volume
+GALLONS_TO_CUBIC_FEET = 0.133681  # 1 gallon = 0.133681 ft³ (7.48052 gal per ft³)
 
 # State URLs by state (complete list from EIA)
 STATE_PRICING_URLS = {

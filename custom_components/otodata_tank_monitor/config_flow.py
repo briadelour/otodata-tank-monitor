@@ -8,7 +8,7 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -18,9 +18,12 @@ from .const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_PRICING_URL,
+    CONF_SCAN_INTERVAL,
     API_URL,
     API_TIMEOUT,
-    STATE_PRICING_URLS,
+    DEFAULT_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+    MAX_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,6 +60,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             if not json_data or len(json_data) == 0:
                 raise NoDevices
 
+    except (InvalidAuth, NoDevices):
+        raise
     except aiohttp.ClientError as err:
         _LOGGER.error("Error connecting to Neevo API: %s", err)
         raise CannotConnect from err
@@ -64,13 +69,21 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         _LOGGER.exception("Unexpected error: %s", err)
         raise CannotConnect from err
 
-    return {"title": f"Otodata Tank Monitor"}
+    return {"title": "Otodata Tank Monitor"}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Otodata Tank Monitor."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> "OptionsFlowHandler":
+        """Return the options flow (update interval)."""
+        return OptionsFlowHandler()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -102,6 +115,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "android_app": "https://play.google.com/store/apps/details?id=ca.otodata.nee_vo&hl=en_US&pli=1",
             },
         )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Options: how often to poll the Nee-Vo service."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+                )
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class CannotConnect(HomeAssistantError):
