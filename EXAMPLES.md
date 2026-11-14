@@ -27,10 +27,10 @@ entities:
   - entity: sensor.neevo_tank_1
     name: Current Level
     icon: mdi:propane-tank
-  - entity: sensor.neevo_tank_1_gallons_remaining
+  - entity: sensor.tank_1_gallons_remaining
     name: Gallons Remaining
     icon: mdi:gauge
-  - entity: sensor.neevo_tank_1_liters_remaining
+  - entity: sensor.tank_1_liters_remaining
     name: Liters Remaining
     icon: mdi:gauge
   - type: attribute
@@ -175,8 +175,8 @@ automation:
           title: "📊 Weekly Propane Report"
           message: |
             Tank Level: {{ states('sensor.neevo_tank_1') }}%
-            Tank Capacity: {{ state_attr('sensor.neevo_tank_1', 'tank_capacity') }} gal
-            Current Price: ${{ states('sensor.propane_price') }}/gal
+            Tank Capacity: {{ state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') }} gal
+            Current Price: ${{ state_attr('sensor.propane_price', 'price_per_gallon') }}/gal
             Last Reading: {{ state_attr('sensor.neevo_tank_1', 'last_reading_date') }}
 ```
 
@@ -224,9 +224,9 @@ automation:
           title: "Time to Order Propane"
           message: >
             Tank: {{ states('sensor.neevo_tank_1') }}%
-            Capacity: {{ state_attr('sensor.neevo_tank_1', 'tank_capacity') }} gal
-            Estimated Gallons: {{ (states('sensor.neevo_tank_1') | float * state_attr('sensor.neevo_tank_1', 'tank_capacity') | float / 100) | round(0) }} gal
-            Current Price: ${{ states('sensor.propane_price') }}/gal
+            Capacity: {{ state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') }} gal
+            Estimated Gallons: {{ (states('sensor.neevo_tank_1') | float * state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') | float / 100) | round(0) }} gal
+            Current Price: ${{ state_attr('sensor.propane_price', 'price_per_gallon') }}/gal
 ```
 
 ### 6. Tank Refill Detection
@@ -259,14 +259,14 @@ automation:
     description: "Alert when actual gallons drop below threshold"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.neevo_tank_1_gallons_remaining
+        entity_id: sensor.tank_1_gallons_remaining
         below: 100
     action:
       - service: notify.mobile_app_your_phone
         data:
           title: "⚠️ Low Propane"
           message: >
-            Only {{ states('sensor.neevo_tank_1_gallons_remaining') }} gallons remaining
+            Only {{ states('sensor.tank_1_gallons_remaining') }} gallons remaining
             ({{ states('sensor.neevo_tank_1') }}% full)
 ```
 
@@ -276,7 +276,7 @@ automation:
 
 ### 1. Gallons Remaining (Built-in)
 
-**You don't need to create this - it's already available as `sensor.neevo_tank_1_gallons_remaining`**
+**You don't need to create this - it's already available as `sensor.tank_1_gallons_remaining`**
 
 For reference, here's how it's calculated internally:
 ```yaml
@@ -287,7 +287,7 @@ template:
         unit_of_measurement: "gal"
         state: >
           {% set level = states('sensor.neevo_tank_1') | float(0) %}
-          {% set capacity = state_attr('sensor.neevo_tank_1', 'tank_capacity') | float(0) %}
+          {% set capacity = state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') | float(0) %}
           {{ (level * capacity / 100) | round(1) }}
         icon: mdi:propane-tank
 ```
@@ -301,9 +301,9 @@ template:
         unique_id: propane_fill_cost
         unit_of_measurement: "$"
         state: >
-          {% set gallons_remaining = states('sensor.neevo_tank_1_gallons_remaining') | float(0) %}
-          {% set capacity = state_attr('sensor.neevo_tank_1', 'tank_capacity') | float(0) %}
-          {% set price = states('sensor.propane_price') | float(0) %}
+          {% set gallons_remaining = states('sensor.tank_1_gallons_remaining') | float(0) %}
+          {% set capacity = state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') | float(0) %}
+          {% set price = state_attr('sensor.propane_price', 'price_per_gallon') | float(0) %}
           {% set gallons_needed = capacity - gallons_remaining %}
           {{ (gallons_needed * price) | round(2) }}
         icon: mdi:currency-usd
@@ -369,9 +369,9 @@ script:
           title: "🔥 Complete Propane Status"
           message: |
             **Tank Level:** {{ states('sensor.neevo_tank_1') }}%
-            **Gallons Remaining:** {{ (states('sensor.neevo_tank_1') | float * state_attr('sensor.neevo_tank_1', 'tank_capacity') | float / 100) | round(1) }} gal
-            **Tank Capacity:** {{ state_attr('sensor.neevo_tank_1', 'tank_capacity') }} gal
-            **Current Price:** ${{ states('sensor.propane_price') }}/gal
+            **Gallons Remaining:** {{ (states('sensor.neevo_tank_1') | float * state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') | float / 100) | round(1) }} gal
+            **Tank Capacity:** {{ state_attr('sensor.neevo_tank_1', 'tank_capacity_gallons') }} gal
+            **Current Price:** ${{ state_attr('sensor.propane_price', 'price_per_gallon') }}/gal
             **Last Reading:** {{ state_attr('sensor.neevo_tank_1', 'last_reading_date') }}
 ```
 

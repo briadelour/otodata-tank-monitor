@@ -6,7 +6,7 @@ This guide will walk you through installing and configuring the Otodata Propane 
 
 Before you begin, ensure you have:
 
-1. **Home Assistant** (version 2023.8.0 or later)
+1. **Home Assistant** (version 2024.11.0 or later)
 2. **HACS** (Home Assistant Community Store) installed
 3. **A Otodata account** with registered tank monitor(s)
 4. **Nee-Vo mobile app** installed and configured:
@@ -61,8 +61,8 @@ If you don't have HACS installed:
 
 1. Download the latest release from [GitHub Releases](https://github.com/briadelour/otodata-tank-monitor/releases)
 2. Extract the ZIP file
-3. Copy the `custom_components/neevo` folder to your Home Assistant `custom_components` directory
-   - Path should be: `/config/custom_components/neevo/`
+3. Copy the `custom_components/otodata_tank_monitor` folder to your Home Assistant `custom_components` directory
+   - Path should be: `/config/custom_components/otodata_tank_monitor/`
    - If `custom_components` doesn't exist, create it
 4. **Restart Home Assistant**
 
@@ -196,7 +196,7 @@ Create a dashboard card to view your tank level:
 ### Integration Not Found
 
 - Ensure you've restarted Home Assistant after installation
-- Check that the files are in `/config/custom_components/neevo/`
+- Check that the files are in `/config/custom_components/otodata_tank_monitor/`
 - Clear your browser cache (Ctrl+F5)
 
 ### Invalid Credentials Error
@@ -214,14 +214,15 @@ Create a dashboard card to view your tank level:
 ### Sensors Show "Unavailable"
 
 - Check Home Assistant logs: **Settings** → **System** → **Logs**
-- Look for errors related to "neevo"
+- Look for errors related to "otodata_tank_monitor"
 - Try reloading the integration: **Settings** → **Devices & Services** → **Otodata** → **⋮** → **Reload**
 
 ### Propane Price Not Working
 
 - Verify the URL loads in your web browser
 - Make sure you copied the complete URL including `https://`
-- The EIA updates prices weekly, so new data may take up to 24 hours to appear
+- EIA publishes weekly from October through March and monthly otherwise, so the sensor may reuse the last price (`price_is_stale: true`)
+- Allow one successful update (up to 6 hours by default) before the first price appears
 
 ## Next Steps
 

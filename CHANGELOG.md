@@ -12,12 +12,13 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 ### Added
 - **Gas Consumption sensor** (`<tank> Gas Consumption`): cumulative propane used, in ft³ (liquid volume), for the Energy dashboard. Tank volume decreases are added to the total; increases (deliveries) are ignored. Survives restarts.
 - **Cubic Feet Remaining sensor** (informational).
-- **Configurable update interval** under the integration's **Configure** button (15 to 1440 minutes, default 1440).
+- **Configurable update interval** under the integration's **Configure** button (15 to 1440 minutes).
 - **Propane Price** attributes `price_per_gallon` and `price_is_stale`.
 - **ENERGY_DASHBOARD.md**: setup guide, unit explanation, limitations for tanks that are refilled by delivery, and troubleshooting.
 
 ### Changed (breaking)
 - **Gallons, Liters and Cubic Feet Remaining** now use device class `volume_storage` and state class `measurement` (were `gas`/`total` for liters and cubic feet). They no longer appear in the Energy dashboard gas picker, which previously let users select a falling value and see negative usage. Home Assistant may flag their old statistics; use **Developer Tools → Statistics → Fix issue**. If one was your Energy gas source, switch to **Gas Consumption**.
+- **Default update interval is now 6 hours** (360 minutes), down from a fixed 24 hours, so a reading can lag by about the device's report interval plus 6 hours instead of plus 24. Existing installs pick this up automatically.
 - **Liters Remaining** now displays in liters. It was shown in ft³ on US unit systems because of the old `gas` device class.
 - Minimum Home Assistant version is now 2024.11.0 (options flow API).
 
@@ -28,7 +29,7 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 - Setup form now shows "invalid username or password" and "no devices found" instead of always reporting a connection error.
 - The EIA price fetch no longer runs inside the Otodata request's 30-second timeout, and price parsing no longer blocks the event loop.
 - `strings.json` was empty; it now matches `translations/en.json`.
-- Documentation: corrected entity IDs, capacity units (the API reports liters), the price unit (USD/ft³), install paths (`otodata_tank_monitor`), and the Mushroom card gallons formula.
+- Documentation: clarified that the integration reads only the tank's current state and does not import history from the Nee-Vo app; corrected entity IDs, capacity units (the API reports liters), the price unit (USD/ft³), install paths (`otodata_tank_monitor`), and the Mushroom card gallons formula.
 
 ### Known limitations
 - Usage is stamped with the time of the poll, not the time propane was burned.

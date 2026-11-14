@@ -87,7 +87,7 @@ Once tested and stable, you can submit to HACS default:
 
 ### Required Files (✓ Complete)
 - [x] `README.md` - Main documentation
-- [x] `custom_components/neevo/` - Integration code
+- [x] `custom_components/otodata_tank_monitor/` - Integration code
 - [x] `hacs.json` - HACS metadata
 - [x] `info.md` - Short description
 - [x] `.github/workflows/validate.yaml` - HACS validation
@@ -130,13 +130,13 @@ Run these to verify your setup:
 find . -name "*.py" | head
 
 # Verify manifest.json
-cat custom_components/neevo/manifest.json | grep domain
+cat custom_components/otodata_tank_monitor/manifest.json | grep domain
 
 # Check HACS validation
 cat .github/workflows/validate.yaml
 
 # Verify translations exist
-ls custom_components/neevo/translations/
+ls custom_components/otodata_tank_monitor/translations/
 ```
 
 ## Common Issues and Solutions

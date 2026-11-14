@@ -1,6 +1,5 @@
 # Otodata Tank Monitor for Home Assistant
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/briadelour)
-[![PayPal](https://img.shields.io/badge/PayPal-donate-blue?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/bdeloureiro)
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub release](https://img.shields.io/github/release/briadelour/otodata-tank-monitor.svg)](https://github.com/briadelour/otodata-tank-monitor/releases)
 
@@ -14,9 +13,9 @@ Monitor your Otodata propane tank levels directly in Home Assistant. Access your
 
 - **Tank level monitoring** - Track your propane tank fill percentage and volume remaining
 - **Energy dashboard support** - A cumulative `Gas Consumption` sensor that ignores deliveries (see [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md))
-- **Configurable updates** - Default every 24 hours; adjustable under the integration's **Configure** button
+- **Configurable updates** - Default every 6 hours; adjustable (15 to 1440 minutes) under the integration's **Configure** button
 - **Multiple tank support** - Monitor multiple propane tanks from one account
-- **Historical data** - Access last reading date and tank capacity information
+- **Current state details** - Last reading date, tank capacity, and alert thresholds. The integration reads only the tank's current state; it does not import history from the Nee-Vo app. Home Assistant records its own history from the time you install the integration
 - **Optional propane pricing** - Track EIA state-average residential propane prices (used for Energy dashboard cost)
 - **Pressure monitoring** - Tank pressure sensor with automatic kPa to PSI conversion
 - **Custom tank names** - Uses your custom names from the Nee-Vo mobile app
@@ -312,6 +311,7 @@ Version 2.0.0 requires Home Assistant 2024.11.0 or later. See the [CHANGELOG](CH
 
 - **Liters / Cubic Feet / Gallons Remaining** changed device class (to volume storage) and state class (to measurement), so they no longer appear in the Energy dashboard picker. Home Assistant may show a statistics warning for them: go to **Developer Tools** → **Statistics** and use **Fix issue**, choosing to delete the old statistics. If you had one of these selected as your Energy gas source, switch to **Gas Consumption**.
 - **Liters Remaining** now shows liters. Before, Home Assistant displayed it in ft³ for US unit systems.
+- **Update interval** default is now 6 hours (it was a fixed 24 hours). Existing installs pick this up automatically; change it under **Configure** if you prefer a different value.
 - **Propane Price** unit is unchanged (USD/ft³). The price is now kept through EIA gaps instead of becoming `unknown`.
 - Entity IDs and unique IDs are unchanged.
 
@@ -380,7 +380,7 @@ If you have multiple tanks, the integration will create a sensor for each tank. 
 
 ### Sensor Not Updating
 
-- The sensor updates every 24 hours by default. Change this under **Settings** → **Devices & Services** → **Otodata Tank Monitor** → **Configure** (15 to 1440 minutes)
+- The sensor updates every 6 hours by default. Change this under **Settings** → **Devices & Services** → **Otodata Tank Monitor** → **Configure** (15 to 1440 minutes)
 - You can force an update by reloading the integration: **Settings** → **Devices & Services** → **Otodata** → **⋮** → **Reload**
 - Check the `last_reading_date` attribute to see when Otodata last received data from your tank monitor
 
@@ -395,9 +395,9 @@ If you have multiple tanks, the integration will create a sensor for each tank. 
 
 ## Update Frequency
 
-- **Tank levels and prices:** every 24 hours (1440 minutes) by default, adjustable from 15 to 1440 minutes under **Configure**. The schedule starts when Home Assistant starts or the integration is reloaded.
+- **Tank levels and prices:** every 6 hours (360 minutes) by default, adjustable from 15 to 1440 minutes under **Configure**. The schedule starts when Home Assistant starts or the integration is reloaded.
 
-The Otodata tank monitors themselves typically report every 6-24 hours depending on model and settings, so polling much faster than hourly rarely helps. Energy dashboard usage is stamped with the time the integration *polled*, not the time the propane was burned.
+The Otodata tank monitors themselves typically report every 6-24 hours depending on model and settings, so polling much faster than hourly rarely helps. The longest a reading can lag is roughly the device's report interval plus your update interval. Energy dashboard usage is stamped with the time the integration *polled*, not the time the propane was burned.
 
 ## Support
 

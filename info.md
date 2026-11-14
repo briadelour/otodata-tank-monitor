@@ -4,13 +4,14 @@ Monitor your Otodata propane tank levels directly in Home Assistant. Access your
 
 ## Features
 
-✅ Real-time tank level monitoring  
+✅ Tank level monitoring  
 ✅ Volume sensors (gallons & liters)  
+✅ Energy dashboard gas consumption (handles deliveries)  
 ✅ Multiple tank support  
 ✅ Optional propane price tracking  
 ✅ Tank pressure sensors (automatic kPa to PSI conversion)  
 ✅ Easy UI configuration  
-✅ Automatic daily updates  
+✅ Configurable updates (default daily)  
 
 ## Quick Setup
 
@@ -27,7 +28,7 @@ Monitor your Otodata propane tank levels directly in Home Assistant. Access your
 
 ## Propane Pricing
 
-Track local propane prices by adding your state's EIA URL:
+Track the EIA state-average propane price (used for Energy dashboard cost) by adding your state's EIA URL:
 
 - **North Carolina**: https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_snc_w.htm
 - **Connecticut**: https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_SCT_w.htm

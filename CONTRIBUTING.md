@@ -53,7 +53,7 @@ Before submitting a PR:
 1. Clone the repository
 2. Create a symbolic link from your HA `custom_components` folder to the integration:
    ```bash
-   ln -s /path/to/otodata-tank-monitor/custom_components/neevo /path/to/homeassistant/custom_components/neevo
+   ln -s /path/to/otodata-tank-monitor/custom_components/otodata_tank_monitor /path/to/homeassistant/custom_components/otodata_tank_monitor
    ```
 3. Restart Home Assistant
 4. Configure the integration through the UI

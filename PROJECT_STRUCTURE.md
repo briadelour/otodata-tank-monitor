@@ -11,7 +11,7 @@ otodata-tank-monitor/
 │       ├── validate.yaml          # HACS validation workflow
 │       └── release.yaml            # Automated release workflow
 ├── custom_components/
-│   └── neevo/
+│   └── otodata_tank_monitor/
 │       ├── translations/
 │       │   └── en.json            # English translations
 │       ├── __init__.py            # Integration initialization
@@ -36,18 +36,18 @@ otodata-tank-monitor/
 
 ### Core Integration Files
 
-#### `custom_components/neevo/__init__.py`
+#### `custom_components/otodata_tank_monitor/__init__.py`
 - Integration setup and entry point
 - Handles platform loading
 - Manages integration lifecycle
 
-#### `custom_components/neevo/config_flow.py`
+#### `custom_components/otodata_tank_monitor/config_flow.py`
 - UI-based configuration flow
 - Credential validation
 - Error handling
 - User input processing
 
-#### `custom_components/neevo/const.py`
+#### `custom_components/otodata_tank_monitor/const.py`
 - Domain name
 - Configuration keys
 - API URLs and timeouts
@@ -55,26 +55,26 @@ otodata-tank-monitor/
 - State-specific pricing URLs
 - Attribute names
 
-#### `custom_components/neevo/sensor.py`
+#### `custom_components/otodata_tank_monitor/sensor.py`
 - Data update coordinator
 - Tank sensor implementation
 - Propane price sensor
 - API communication
 - State and attribute management
 
-#### `custom_components/neevo/manifest.json`
+#### `custom_components/otodata_tank_monitor/manifest.json`
 - Integration metadata
 - Version information
 - Dependencies
 - IoT class declaration
 - Documentation links
 
-#### `custom_components/neevo/strings.json`
+#### `custom_components/otodata_tank_monitor/strings.json`
 - Configuration flow UI text
 - Error messages
 - Descriptions and placeholders
 
-#### `custom_components/neevo/translations/en.json`
+#### `custom_components/otodata_tank_monitor/translations/en.json`
 - English language translations
 - Mirrors strings.json
 
@@ -167,7 +167,7 @@ The integration uses Home Assistant's UI-based configuration:
 
 ### 2. Data Update Coordinator
 Manages data fetching and updates:
-- 24-hour update interval
+- 6-hour default update interval (configurable)
 - Handles multiple tanks
 - Optional price fetching
 - Error handling and retry logic
@@ -227,7 +227,7 @@ The integration meets HACS requirements:
 - **Authentication**: HTTP Basic Auth
 - **Method**: GET
 - **Response**: JSON array of tank objects
-- **Rate Limit**: None specified (using 24-hour polling)
+- **Rate Limit**: None specified (using 6-hour default polling)
 
 ### EIA Pricing API
 - **Endpoint**: State-specific HTML pages
@@ -248,9 +248,8 @@ The integration meets HACS requirements:
 Potential improvements tracked in CHANGELOG:
 - Additional state pricing URLs
 - Historical data tracking
-- Custom update intervals
 - Multiple account support
-- Energy dashboard integration
+- Delivery detection events
 
 ## Support and Maintenance
 

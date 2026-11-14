@@ -242,8 +242,7 @@ automation:
 Planned enhancements for future versions:
 - Historical data tracking
 - Fill detection notifications
-- Integration with Home Assistant Energy dashboard
-- Cost tracking and estimates
+- Delivery detection events
 - Usage rate calculations
 - Multiple account support
 
@@ -275,4 +274,4 @@ For questions about these enhanced features:
 **Version**: 1.0.0  
 **Release Date**: January 2026  
 **API Version**: Otodata v1  
-**Min HA Version**: 2023.8.0
+**Min HA Version**: 2024.11.0

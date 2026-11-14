@@ -4,7 +4,7 @@ Get up and running with the Otodata Propane Tank Monitor in 5 minutes!
 
 ## Prerequisites Checklist
 
-- [ ] Home Assistant installed (2023.8.0+)
+- [ ] Home Assistant installed (2024.11.0+)
 - [ ] HACS installed
 - [ ] Nee-Vo mobile app installed ([iOS](https://apps.apple.com/us/app/nee-vo/id1108454345) | [Android](https://play.google.com/store/apps/details?id=ca.otodata.nee_vo&hl=en_US&pli=1))
 - [ ] Otodata account created
