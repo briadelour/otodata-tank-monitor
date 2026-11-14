@@ -1,6 +1,9 @@
 # Using Propane Usage in the Home Assistant Energy Dashboard
 
 This guide is for tanks that are **refilled by delivery** (in-ground or above-ground) and monitored with an Otodata/Nee-Vo tank reader. It explains which sensor to pick, what the numbers mean, and what to expect.
+<img width="1821" height="857" alt="image" src="https://github.com/user-attachments/assets/36024416-36a3-4137-9c46-7fd7639029e7" />
+
+<img width="1832" height="520" alt="image" src="https://github.com/user-attachments/assets/415082bb-ce11-43dd-b73a-e6c823351bf3" />
 
 ## The short version
 
