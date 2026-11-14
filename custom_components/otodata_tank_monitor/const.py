@@ -14,7 +14,7 @@ API_URL = "https://ws.otodatanetwork.com/neevoapp/v1/DataService.svc/GetAllDispl
 API_TIMEOUT = 30
 
 # Defaults
-DEFAULT_SCAN_INTERVAL = 1440  # 24 hours in minutes
+DEFAULT_SCAN_INTERVAL = 360  # 6 hours in minutes
 MIN_SCAN_INTERVAL = 15  # minutes
 MAX_SCAN_INTERVAL = 1440  # minutes
 DEFAULT_NAME = "Otodata Tank"

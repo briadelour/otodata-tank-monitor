@@ -25,7 +25,7 @@
     "step": {
       "init": {
         "title": "Otodata Tank Monitor options",
-        "description": "How often to poll the Nee-Vo service. Shorter intervals give more accurate timing for Energy dashboard usage. The tank monitor itself only reports every 6-24 hours, so values below 60 minutes rarely help.",
+        "description": "How often to poll the Nee-Vo service. Shorter intervals give more accurate timing for Energy dashboard usage. The tank monitor itself only reports every 6-24 hours, so values below 60 minutes rarely help. Default is 360 (6 hours).",
         "data": {
           "scan_interval": "Update interval (minutes)"
         }
