@@ -36,6 +36,31 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 - If propane is used and a delivery arrives between two polls, the two changes net out and a little usage is not counted.
 - Tank level is reported in whole percent, so 1% of tank capacity is the smallest step.
 
+## [1.3.0] - 2026-05-19
+
+### Fixed
+- fixed gas consumption for energy dashboard compatiblity
+
+## [1.2.2] - 2026-05-18
+
+### Fixed
+- Fixed price and cubic ft
+
+## [1.2.1] - 2026-05-18
+
+### Fixed
+- refactored parsing of price from html
+
+## [1.2.0] - 2026-05-18
+
+### Fixed
+- updated device class for gas
+
+## [1.1.2] - 2026-05-18
+
+### Fixed
+- Refactored price parsing for NC
+
 ## [1.1.1] - 2026-01-16
 
 ### Fixed
