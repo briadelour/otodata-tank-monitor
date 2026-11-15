@@ -644,9 +644,21 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
             except (ValueError, TypeError):
                 self._previous_volume_ft3 = None
 
+        # The coordinator's first fetch happens before this entity exists, so
+        # no update callback fires for it. Compare it against the restored
+        # previous volume now so usage across a restart or reload is counted
+        # right away instead of waiting for the next poll. (The state is
+        # written by Home Assistant when this method returns.)
+        self._process_current_volume()
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Calculate consumption delta on each coordinator update."""
+        self._process_current_volume()
+        self.async_write_ha_state()
+
+    def _process_current_volume(self) -> None:
+        """Add any drop since the previous volume to the running total."""
         current_volume = self._get_current_volume_ft3()
 
         if current_volume is not None:
@@ -668,8 +680,6 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
                         "Delivery detected: volume increased by %.3f ft³", abs(delta)
                     )
             self._previous_volume_ft3 = current_volume
-
-        self.async_write_ha_state()
 
     def _get_current_volume_ft3(self) -> float | None:
         """Return current tank volume in ft³."""
