@@ -21,6 +21,8 @@ from homeassistant.const import PERCENTAGE, UnitOfPressure, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -586,6 +588,9 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
     LITERS_TO_CUBIC_FEET = 0.0353147
     # Ignore tiny fluctuations smaller than this (sensor noise / rounding)
     MIN_DELTA_FT3 = 0.01
+    # Seconds to wait after Home Assistant has started before counting usage
+    # that happened while it was down (see async_added_to_hass).
+    STARTUP_CATCH_UP_DELAY = 60
 
     def __init__(
         self,
@@ -596,6 +601,8 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._tank_index = tank_index
+        self._unsub_start = None
+        self._unsub_delay = None
         self._cumulative_consumption: float = 0.0
         self._previous_volume_ft3: float | None = None
 
@@ -644,12 +651,45 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
             except (ValueError, TypeError):
                 self._previous_volume_ft3 = None
 
+        if self._previous_volume_ft3 is None:
+            # Fresh install: just record the starting volume. Nothing to add.
+            self._process_current_volume()
+            return
+
         # The coordinator's first fetch happens before this entity exists, so
-        # no update callback fires for it. Compare it against the restored
-        # previous volume now so usage across a restart or reload is counted
-        # right away instead of waiting for the next poll. (The state is
-        # written by Home Assistant when this method returns.)
+        # no update callback fires for it. Usage that happened across a restart
+        # or reload is therefore counted shortly after startup instead of
+        # waiting for the next poll. It is deliberately NOT counted right now:
+        # the Energy dashboard's cost sensor treats the first value it sees as
+        # its starting point, so the restored total must be published first
+        # and the catch-up applied afterwards, as a normal increase it can price.
+        self.async_on_remove(self._cancel_catch_up)
+        self._unsub_start = async_at_started(self.hass, self._async_start_catch_up)
+
+    @callback
+    def _async_start_catch_up(self, _hass: HomeAssistant) -> None:
+        """Home Assistant has started: schedule the catch-up after a short delay."""
+        self._unsub_start = None
+        self._unsub_delay = async_call_later(
+            self.hass, self.STARTUP_CATCH_UP_DELAY, self._async_catch_up
+        )
+
+    @callback
+    def _async_catch_up(self, _now: datetime) -> None:
+        """Count any drop that happened while Home Assistant was not running."""
+        self._unsub_delay = None
         self._process_current_volume()
+        self.async_write_ha_state()
+
+    @callback
+    def _cancel_catch_up(self) -> None:
+        """Cancel a pending catch-up (entity removed or integration unloaded)."""
+        if self._unsub_start is not None:
+            self._unsub_start()
+            self._unsub_start = None
+        if self._unsub_delay is not None:
+            self._unsub_delay()
+            self._unsub_delay = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
