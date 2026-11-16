@@ -75,6 +75,8 @@ EIA publishes weekly prices from October through March and monthly the rest of t
 3. After the tank level drops by 1%, the consumption sensor should rise by one step from the table above (for a 320 gal tank, about 0.428 ft³).
 4. About 10 minutes later, the Energy dashboard's **Gas** tab should show the same amount in the bar for the hour of the poll.
 
+After a Home Assistant restart or an integration reload, the first reading is compared against the last one the sensor remembered, so a drop that happened in between is counted about a minute after Home Assistant finishes starting. On 2.0.0 and 2.0.1 that first comparison was skipped and the sensor could show one reading behind until the next poll. On 2.0.2 it was counted during startup, which could leave that usage without a cost. Update to 2.0.3 or later.
+
 ## Troubleshooting
 
 **Negative gas total.** You selected a "Remaining" sensor. Remove it from the gas source and add **Gas Consumption**. After upgrading from 1.x, also clear the old statistics under **Developer Tools → Statistics**.
@@ -82,6 +84,8 @@ EIA publishes weekly prices from October through March and monthly the rest of t
 **Gas shows 0.00 ft³.** Confirm the Gas Consumption sensor is the selected source. Then check that the tank level has actually dropped since the integration was added. If a validation warning appears under **Developer Tools → Statistics**, use **Fix issue**.
 
 **Cost shows $0.00.** Usage that happened before the cost option was saved is never priced. If new usage still shows no cost, check that `Propane Price` has a numeric value. If it is `unknown`, either EIA has not published a value yet or the pricing URL is wrong; a static price works as a workaround.
+
+**The cost entity ends in `_2`.** The cost sensor is created by Home Assistant's Energy dashboard, not by this integration. It gets a `_2` suffix when an older entity already holds the plain name (for example, one left over from a previous gas source). To tidy it: in **Settings → Devices & Services → Entities**, search for `gas_consumption_cost`, delete the leftover entity that has no `_2`, then open the `_2` entity's settings and remove `_2` from its entity ID. Back up first and restart afterward. The name is cosmetic and nothing depends on it.
 
 **Bad statistics from earlier tests.** Remove them under **Developer Tools → Statistics** (use the delete or fix action on the affected sensor).
 

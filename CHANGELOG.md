@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-11-16
+
+### Fixed
+- **Gas Consumption** now applies the restart catch-up about a minute after Home Assistant has finished starting, not during startup. In 2.0.2 the catch-up ran during startup, so the Energy dashboard's cost sensor took the already-updated total as its starting point and never priced that usage (usage showed, cost showed $0.00). The restored total is now published first and the catch-up arrives as a normal increase.
+- Documentation: explained why the Energy cost entity ends in `_2` and how to tidy it (see the Energy dashboard guide).
+
+## [2.0.2] - 2026-11-15
+
+### Fixed
+- **Gas Consumption** now compares the first reading after a Home Assistant restart or integration reload against the last reading it remembered. Previously that first reading was skipped, so usage that happened across a restart was not counted until the next poll, and the sensor showed one reading behind in the meantime.
+- `manifest.json` now reports the real version (it still said 2.0.0 in 2.0.1).
+- `translations/en.json` now matches `strings.json` (the options text mentions the 6-hour default).
+- Documentation: corrected the **Liters Remaining** note. After upgrading from 1.x, Home Assistant may keep showing the old ft³ display unit; set the unit to **L** in the entity's settings.
+
 ## [2.0.1] - 2026-11-14
 
 ### Added
@@ -24,7 +38,7 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 ### Changed (breaking)
 - **Gallons, Liters and Cubic Feet Remaining** now use device class `volume_storage` and state class `measurement` (were `gas`/`total` for liters and cubic feet). They no longer appear in the Energy dashboard gas picker, which previously let users select a falling value and see negative usage. Home Assistant may flag their old statistics; use **Developer Tools → Statistics → Fix issue**. If one was your Energy gas source, switch to **Gas Consumption**.
 - **Default update interval is now 6 hours** (360 minutes), down from a fixed 24 hours, so a reading can lag by about the device's report interval plus 6 hours instead of plus 24. Existing installs pick this up automatically.
-- **Liters Remaining** now displays in liters. It was shown in ft³ on US unit systems because of the old `gas` device class.
+- **Liters Remaining**: because the old `gas` device class is gone, new installs show liters. Upgraded installs may keep the old ft³ display unit until you set it to **L** in the entity's settings.
 - Minimum Home Assistant version is now 2024.11.0 (options flow API).
 
 ### Fixed
@@ -155,6 +169,9 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 
 ## Version History
 
+- **2.0.3** - Restart catch-up now waits until startup finishes so cost is priced
+- **2.0.2** - Gas Consumption counts usage across restarts immediately; manifest and translation fixes
+- **2.0.1** - Added the Energy dashboard guide and README updates
 - **2.0.0** - Energy dashboard support, configurable update interval, price and setup fixes
 - **1.1.1** - Fixed volume calculations (API capacity is in liters)
 - **1.0.0** - Initial HACS-compatible release
