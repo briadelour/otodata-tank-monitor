@@ -14,6 +14,9 @@ Monitor your Otodata propane tank levels directly in Home Assistant. Access your
 
 - **Tank level monitoring** - Track your propane tank fill percentage and volume remaining
 - **Energy dashboard support** - A cumulative `Gas Consumption` sensor that ignores deliveries (see [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md))
+- **Delivery detection** - A `Last Delivery` sensor and a tank-filled event so you can be notified when the tank is filled
+- **Spike protection** - A single bad reading (such as a momentary 0%) is held for confirmation instead of being counted as usage
+- **Nee-Vo app recipes** - Dashboard cards and automations that recreate the app's gauge, tank details, level and fill notifications (see [NEEVO_APP_FEATURES.md](NEEVO_APP_FEATURES.md))
 - **Configurable updates** - Default every 6 hours; adjustable (15 to 1440 minutes) under the integration's **Configure** button
 - **Multiple tank support** - Monitor multiple propane tanks from one account
 - **Current state details** - Last reading date, tank capacity, and alert thresholds. The integration reads only the tank's current state; it does not import history from the Nee-Vo app. Home Assistant records its own history from the time you install the integration
@@ -167,12 +170,15 @@ The URL pattern is: `https://www.eia.gov/dnav/pet/pet_pri_wfr_dcus_S[STATE]_w.ht
 | **Liters Remaining** | L | Level % × capacity | Gauges (metric) |
 | **Cubic Feet Remaining** | ft³ | Liquid volume remaining (informational) | Reference only |
 | **Gas Consumption** | ft³ | Running total of propane used. Deliveries are ignored | **Energy dashboard** |
+| **Last Delivery** | timestamp | Time of the most recent fill, with `gallons_added`, `level_before`, `level_after`, `price_per_gallon`, `estimated_cost` as attributes | Notifications, dashboards |
 | **Pressure** (if reported) | PSI | Tank pressure, converted from kPa | Monitoring |
 | **Propane Price** (if configured) | USD/ft³ | EIA state average × 7.48052 (see attributes for $/gal) | Energy dashboard cost |
 
 **Energy dashboard:** use *Gas Consumption* only. The *Remaining* sensors go down as you use propane and would show negative usage. See [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md) for setup, units, and what to expect.
 
-**Gas Consumption details:** each time the integration polls, a drop in tank volume is added to the total and a rise (a delivery) is ignored. The total survives restarts and starts at 0 on a new install. Its `previous_volume_ft3` attribute is how it remembers the last reading, so don't edit it.
+**Gas Consumption details:** each time the integration polls, a drop in tank volume is added to the total and a rise (a delivery) is ignored. The total survives restarts and starts at 0 on a new install. Its `previous_volume_ft3` attribute is how it remembers the last reading, so don't edit it. A drop larger than the spike threshold (default 10% of the tank) is held until a second, different reading confirms it (`held_drop_volume_ft3` shows while one is held). Change or disable this under **Configure**.
+
+**Tank-filled event:** when the level rises by 5 points or more, the event `otodata_tank_monitor_tank_filled` is fired and the **Last Delivery** sensor updates. See [NEEVO_APP_FEATURES.md](NEEVO_APP_FEATURES.md) for a notification automation.
 
 **Propane Price details:** the price is converted from EIA's $/gal. Attributes: `price_per_gallon`, and `price_is_stale` (true when EIA has no fresh value and the last good price is being reused, which can happen outside the October-March weekly reporting season).
 
@@ -306,12 +312,16 @@ NOTE: Go to Developer Tools and run homeassistant.reload_config_entry to find th
 
 Add **Gas Consumption** as the gas source and **Propane Price** (or a static price) for cost. Full guide, including units, limitations for refilled tanks, and troubleshooting: [ENERGY_DASHBOARD.md](ENERGY_DASHBOARD.md).
 
+## Upgrading to 2.1.0
+
+No breaking changes from 2.0.x. New: the `Last Delivery` sensor and tank-filled event, spike protection, and a second field under **Configure**. `tank_capacity_gallons` now shows two decimals (319.97 instead of 320.0).
+
 ## Upgrading from 1.x to 2.0.0
 
 Version 2.0.0 requires Home Assistant 2024.11.0 or later. See the [CHANGELOG](CHANGELOG.md) for everything that changed. The ones that may affect you:
 
 - **Liters / Cubic Feet / Gallons Remaining** changed device class (to volume storage) and state class (to measurement), so they no longer appear in the Energy dashboard picker. Home Assistant may show a statistics warning for them: go to **Developer Tools** → **Statistics** and use **Fix issue**, choosing to delete the old statistics. If you had one of these selected as your Energy gas source, switch to **Gas Consumption**.
-- **Liters Remaining** now shows liters. Before, Home Assistant displayed it in ft³ for US unit systems.
+- **Liters Remaining**: Home Assistant may keep showing the old ft³ display unit on upgraded installs. If so, open the entity's settings and set the unit of measurement to **L**.
 - **Update interval** default is now 6 hours (it was a fixed 24 hours). Existing installs pick this up automatically; change it under **Configure** if you prefer a different value.
 - **Propane Price** unit is unchanged (USD/ft³). The price is now kept through EIA gaps instead of becoming `unknown`.
 - Entity IDs and unique IDs are unchanged.

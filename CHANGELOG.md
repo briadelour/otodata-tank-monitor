@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-11-20
+
+### Added
+- **Tank-filled event and Last Delivery sensor.** When the tank level rises by 5 percentage points or more, the integration fires the event `otodata_tank_monitor_tank_filled` with `tank_id`, `tank_name`, `level_before`, `level_after`, `gallons_added` (estimated from the level change), `price_per_gallon`, `estimated_cost`, and `delivery_time`. A new `<tank> Last Delivery` timestamp sensor records the most recent one with the same details as attributes and keeps them across restarts. Use it to recreate the Nee-Vo app's "Tank filled" notification.
+- **Spike protection.** A single reading that drops by more than a set percent of the tank (default 10%) is held until a second, different reading confirms it. A one-off bad reading, such as a momentary 0%, is discarded instead of being counted as usage. Configure it (0 turns it off) under **Configure**. While a reading is held, the Gas Consumption sensor shows a `held_drop_volume_ft3` attribute.
+- **NEEVO_APP_FEATURES.md**: dashboard cards and automations that recreate the Nee-Vo app's gauge with 20%/40% lines, Tank Details, level notifications (read from the app's own thresholds), the tank-filled notification, and 7/30/90 day history charts. Everything is read-only; nothing is written to Otodata.
+
+### Changed
+- `tank_capacity_gallons` now has two decimals (319.97 instead of 320.0) to match the Nee-Vo app. Gallons Remaining uses the exact capacity and is unchanged.
+- The options form (**Configure**) now has two fields: update interval and spike protection.
+
+### Known limitations
+- A one-off false *high* reading would be treated as a delivery. Rises are accepted immediately so the filled notification is not delayed by up to a day.
+- A drop that is genuinely larger than the spike threshold in one reading (for example a very large leak) is counted one reading later, once confirmed.
+- `gallons_added` is estimated from the level change in whole percent, so it can differ from the delivery ticket by a few gallons.
+
 ## [2.0.3] - 2026-11-16
 
 ### Fixed
@@ -169,6 +185,7 @@ Major release: adds proper Energy dashboard support and fixes several issues fou
 
 ## Version History
 
+- **2.1.0** - Tank-filled event and Last Delivery sensor, spike protection, Nee-Vo app feature recipes
 - **2.0.3** - Restart catch-up now waits until startup finishes so cost is priced
 - **2.0.2** - Gas Consumption counts usage across restarts immediately; manifest and translation fixes
 - **2.0.1** - Added the Energy dashboard guide and README updates

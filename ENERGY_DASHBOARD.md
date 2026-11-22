@@ -57,8 +57,11 @@ By default the integration polls every 6 hours (the schedule starts when Home As
 
 You can poll more often under **Settings → Devices & Services → Otodata Tank Monitor → Configure** (15 to 1440 minutes). The tank monitor itself only reports every 6 to 24 hours, so going below hourly rarely helps, but a shorter interval spreads usage across more hours and reduces the delivery-day undercount.
 
+### One bad reading no longer counts as usage
+If a single reading drops by more than 10% of the tank (adjustable under **Configure**), it is held until a second, different reading confirms it. A momentary 0% from the tank monitor is therefore discarded instead of adding the whole tank to your usage. The Gas Consumption sensor shows a `held_drop_volume_ft3` attribute while a reading is held. A genuine large drop is counted one reading later.
+
 ### Deliveries can hide a little usage
-If you burn propane and receive a delivery between two polls, the two changes net against each other. The usage between the previous poll and the delivery is not counted. Over a year this is usually small, but it means the total is a slight underestimate on delivery days. A shorter update interval reduces the effect.
+If you burn propane and receive a delivery between two polls, the two changes net against each other. The usage between the previous poll and the delivery is not counted. Over a year this is usually small, but it means the total is a slight underestimate on delivery days. A shorter update interval reduces the effect. Deliveries are detected (level rise of 5 points or more), update the **Last Delivery** sensor, and fire the `otodata_tank_monitor_tank_filled` event; they never add usage or cost.
 
 ### Cost is not backfilled
 Cost is calculated when usage is recorded, using the price at that moment. If you add or change the cost setting later, earlier usage stays at $0.00. Only new usage gets a cost.
