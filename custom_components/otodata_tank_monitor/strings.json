@@ -25,9 +25,10 @@
     "step": {
       "init": {
         "title": "Otodata Tank Monitor options",
-        "description": "How often to poll the Nee-Vo service. Shorter intervals give more accurate timing for Energy dashboard usage. The tank monitor itself only reports every 6-24 hours, so values below 60 minutes rarely help. Default is 360 (6 hours).",
+        "description": "Update interval: how often to poll the Nee-Vo service. The tank monitor itself only reports every 6-24 hours, so values below 60 minutes rarely help. Default is 360 (6 hours).\n\nSpike protection: a single reading that drops by more than this percent of the tank is held until a second, different reading confirms it, so one bad reading is not counted as usage. Set 0 to turn it off. Default is 10.",
         "data": {
-          "scan_interval": "Update interval (minutes)"
+          "scan_interval": "Update interval (minutes)",
+          "spike_threshold": "Spike protection threshold (% of tank, 0 = off)"
         }
       }
     }

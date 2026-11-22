@@ -8,6 +8,7 @@ CONF_PASSWORD = "password"
 CONF_PRICING_URL = "pricing_url"
 # Options (set from the integration's "Configure" button)
 CONF_SCAN_INTERVAL = "scan_interval"  # minutes
+CONF_SPIKE_THRESHOLD = "spike_threshold"  # percent of tank capacity
 
 # API
 API_URL = "https://ws.otodatanetwork.com/neevoapp/v1/DataService.svc/GetAllDisplayPropaneDevices"
@@ -17,6 +18,16 @@ API_TIMEOUT = 30
 DEFAULT_SCAN_INTERVAL = 360  # 6 hours in minutes
 MIN_SCAN_INTERVAL = 15  # minutes
 MAX_SCAN_INTERVAL = 1440  # minutes
+# A single-reading drop larger than this (percent of tank capacity) is held
+# until a second, different reading confirms it. 0 turns the protection off.
+DEFAULT_SPIKE_THRESHOLD = 10
+MIN_SPIKE_THRESHOLD = 0
+MAX_SPIKE_THRESHOLD = 50
+# A level rise of at least this many percentage points is treated as a delivery.
+DELIVERY_MIN_PERCENT = 5
+
+# Event fired when a delivery (fill) is detected
+EVENT_TANK_FILLED = "otodata_tank_monitor_tank_filled"
 DEFAULT_NAME = "Otodata Tank"
 
 # Conversion factors
@@ -24,6 +35,7 @@ KPA_TO_PSI = 0.145038  # 1 kPa = 0.145038 PSI
 GALLONS_TO_LITERS = 3.78541  # 1 gallon = 3.78541 liters
 LITERS_TO_CUBIC_FEET = 0.0353147  # liquid volume, not gas vapor volume
 GALLONS_TO_CUBIC_FEET = 0.133681  # 1 gallon = 0.133681 ft³ (7.48052 gal per ft³)
+CUBIC_FEET_TO_GALLONS = 7.48052
 
 # State URLs by state (complete list from EIA)
 STATE_PRICING_URLS = {

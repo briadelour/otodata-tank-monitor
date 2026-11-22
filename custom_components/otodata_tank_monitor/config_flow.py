@@ -19,11 +19,15 @@ from .const import (
     CONF_PASSWORD,
     CONF_PRICING_URL,
     CONF_SCAN_INTERVAL,
+    CONF_SPIKE_THRESHOLD,
     API_URL,
     API_TIMEOUT,
     DEFAULT_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
     MAX_SCAN_INTERVAL,
+    DEFAULT_SPIKE_THRESHOLD,
+    MIN_SPIKE_THRESHOLD,
+    MAX_SPIKE_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,7 +122,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Options: how often to poll the Nee-Vo service."""
+    """Options: update interval and spike protection."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -130,12 +134,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         current = self.config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
         )
+        current_spike = self.config_entry.options.get(
+            CONF_SPIKE_THRESHOLD, DEFAULT_SPIKE_THRESHOLD
+        )
         schema = vol.Schema(
             {
                 vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                )
+                ),
+                vol.Required(CONF_SPIKE_THRESHOLD, default=current_spike): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_SPIKE_THRESHOLD, max=MAX_SPIKE_THRESHOLD),
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

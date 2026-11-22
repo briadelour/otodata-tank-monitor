@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import re
 from typing import Any
@@ -28,6 +28,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -35,9 +36,14 @@ from .const import (
     CONF_PASSWORD,
     CONF_PRICING_URL,
     CONF_SCAN_INTERVAL,
+    CONF_SPIKE_THRESHOLD,
     API_URL,
     API_TIMEOUT,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SPIKE_THRESHOLD,
+    DELIVERY_MIN_PERCENT,
+    EVENT_TANK_FILLED,
+    CUBIC_FEET_TO_GALLONS,
     KPA_TO_PSI,
     GALLONS_TO_LITERS,
     ATTR_LEVEL,
@@ -76,6 +82,19 @@ def parse_neevo_date(date_str: str | None) -> datetime | None:
     return None
 
 
+def parse_neevo_date_utc(date_str: str | None) -> datetime | None:
+    """Like parse_neevo_date, but returns a timezone-aware UTC datetime."""
+    if not date_str:
+        return None
+    match = re.search(r"/Date\((\d+)([+-]\d{4})?\)/", date_str)
+    if not match:
+        return None
+    try:
+        return datetime.fromtimestamp(int(match.group(1)) / 1000, tz=timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -104,6 +123,15 @@ async def async_setup_entry(
 
             # Gas consumption sensor - use THIS one for the Energy dashboard
             entities.append(OtodataTankConsumptionSensor(coordinator, entry, idx))
+
+            # Last delivery (fill) sensor, fed by the consumption sensor's event
+            entities.append(
+                OtodataLastDeliverySensor(
+                    entry,
+                    tank_data.get("Id", "unknown"),
+                    tank_data.get("CustomName") or f"Tank {idx + 1}",
+                )
+            )
             
             # Tank pressure sensor (if available)
             if tank_data.get("TankLastPressure") is not None:
@@ -299,7 +327,7 @@ class OtodataTankSensor(CoordinatorEntity, SensorEntity):
             
             # Add tank capacity in gallons for clarity
             if capacity_liters is not None:
-                attrs["tank_capacity_gallons"] = round(capacity_liters / GALLONS_TO_LITERS, 1)
+                attrs["tank_capacity_gallons"] = round(capacity_liters / GALLONS_TO_LITERS, 2)
             
             # Add formatted last reading date
             if last_reading:
@@ -603,6 +631,12 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
         self._tank_index = tank_index
         self._unsub_start = None
         self._unsub_delay = None
+        # A large drop waiting for a second, different reading to confirm it:
+        # (volume_ft3, reading marker). None when nothing is being held.
+        self._held_drop: tuple[float, str | None] | None = None
+        self._spike_percent: int = entry.options.get(
+            CONF_SPIKE_THRESHOLD, DEFAULT_SPIKE_THRESHOLD
+        )
         self._cumulative_consumption: float = 0.0
         self._previous_volume_ft3: float | None = None
 
@@ -619,6 +653,8 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
             if custom_name:
                 tank_name = custom_name
 
+        self._tank_id = tank_id
+        self._tank_name = tank_name
         self._attr_unique_id = f"{entry.entry_id}_consumption_{tank_id}"
         self._attr_name = f"{tank_name} Gas Consumption"
         self._attr_device_class = SensorDeviceClass.GAS
@@ -698,28 +734,120 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
         self.async_write_ha_state()
 
     def _process_current_volume(self) -> None:
-        """Add any drop since the previous volume to the running total."""
-        current_volume = self._get_current_volume_ft3()
+        """Update the running total from the latest reading.
 
-        if current_volume is not None:
-            if self._previous_volume_ft3 is not None:
-                delta = self._previous_volume_ft3 - current_volume
-                if delta > self.MIN_DELTA_FT3:
-                    # Tank went down — record consumption
-                    self._cumulative_consumption = round(
-                        self._cumulative_consumption + delta, 3
+        - A drop is added to the total (usage).
+        - A rise of DELIVERY_MIN_PERCENT or more fires a "tank filled" event.
+        - A drop larger than the spike threshold is held until a second,
+          different reading confirms it, so one bad reading (for example a
+          momentary 0%) is not counted as usage.
+        """
+        current = self._get_current_volume_ft3()
+        if current is None:
+            return
+
+        previous = self._previous_volume_ft3
+        if previous is None:
+            # First reading ever seen: just record it.
+            self._previous_volume_ft3 = current
+            return
+
+        reading = self._get_reading_marker()
+        delta = previous - current
+        capacity = self._get_capacity_ft3()
+        threshold_ft3 = (
+            capacity * self._spike_percent / 100
+            if capacity and self._spike_percent > 0
+            else None
+        )
+
+        if delta > self.MIN_DELTA_FT3:
+            if threshold_ft3 is not None and delta > threshold_ft3:
+                if self._held_drop is None:
+                    self._held_drop = (current, reading)
+                    _LOGGER.warning(
+                        "%s: reading dropped %.1f%% in one step; holding it until "
+                        "a second reading confirms it",
+                        self._tank_name,
+                        delta / capacity * 100,
                     )
-                    _LOGGER.debug(
-                        "Propane consumed: %.3f ft³ | Total: %.3f ft³",
-                        delta,
-                        self._cumulative_consumption,
-                    )
-                elif delta < -self.MIN_DELTA_FT3:
-                    # Tank went up — delivery detected, ignore for consumption
-                    _LOGGER.debug(
-                        "Delivery detected: volume increased by %.3f ft³", abs(delta)
-                    )
-            self._previous_volume_ft3 = current_volume
+                    return
+                if reading is not None and reading == self._held_drop[1]:
+                    # Same reading as when it was held; wait for a new one.
+                    return
+                _LOGGER.info("%s: large drop confirmed by a second reading", self._tank_name)
+            self._held_drop = None
+            self._cumulative_consumption = round(self._cumulative_consumption + delta, 3)
+            _LOGGER.debug(
+                "Propane consumed: %.3f ft³ | Total: %.3f ft³",
+                delta,
+                self._cumulative_consumption,
+            )
+        else:
+            if self._held_drop is not None:
+                _LOGGER.info("%s: held drop discarded; reading recovered", self._tank_name)
+            self._held_drop = None
+            if delta < -self.MIN_DELTA_FT3 and capacity:
+                rise_percent = (-delta) / capacity * 100
+                if rise_percent >= DELIVERY_MIN_PERCENT:
+                    self._fire_tank_filled(previous, current, capacity, reading)
+
+        self._previous_volume_ft3 = current
+
+    def _fire_tank_filled(
+        self, previous: float, current: float, capacity: float, reading: str | None
+    ) -> None:
+        """Fire the tank-filled event with details about the delivery."""
+        added_ft3 = current - previous
+        gallons_added = round(added_ft3 * CUBIC_FEET_TO_GALLONS, 1)
+
+        price_per_gallon = None
+        if self.coordinator.data and self.coordinator.data.get("propane_price"):
+            try:
+                price_per_gallon = round(float(self.coordinator.data["propane_price"]), 3)
+            except (ValueError, TypeError):
+                price_per_gallon = None
+        estimated_cost = (
+            round(gallons_added * price_per_gallon, 2)
+            if price_per_gallon is not None
+            else None
+        )
+
+        when = parse_neevo_date_utc(reading) or dt_util.utcnow()
+        data = {
+            "tank_id": self._tank_id,
+            "tank_name": self._tank_name,
+            "level_before": round(previous / capacity * 100, 1),
+            "level_after": round(current / capacity * 100, 1),
+            "gallons_added": gallons_added,
+            "price_per_gallon": price_per_gallon,
+            "estimated_cost": estimated_cost,
+            "delivery_time": when.isoformat(),
+        }
+        _LOGGER.info("%s: delivery detected: %s", self._tank_name, data)
+        self.hass.bus.async_fire(EVENT_TANK_FILLED, data)
+
+    def _get_tank_data(self) -> dict[str, Any] | None:
+        """Return this tank's raw API data, if available."""
+        if (
+            self.coordinator.data
+            and "tanks" in self.coordinator.data
+            and len(self.coordinator.data["tanks"]) > self._tank_index
+        ):
+            return self.coordinator.data["tanks"][self._tank_index]
+        return None
+
+    def _get_reading_marker(self) -> str | None:
+        """Return an identifier for the tank monitor's latest reading."""
+        tank_data = self._get_tank_data()
+        return tank_data.get("LastReadingDate") if tank_data else None
+
+    def _get_capacity_ft3(self) -> float | None:
+        """Return the tank's total capacity in ft³ (liquid volume)."""
+        tank_data = self._get_tank_data()
+        if tank_data and tank_data.get("TankCapacity") is not None:
+            return tank_data["TankCapacity"] * self.LITERS_TO_CUBIC_FEET
+        return None
 
     def _get_current_volume_ft3(self) -> float | None:
         """Return current tank volume in ft³."""
@@ -743,8 +871,78 @@ class OtodataTankConsumptionSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose previous volume so it can be restored on restart."""
-        return {"previous_volume_ft3": self._previous_volume_ft3}
+        """Expose previous volume (restored on restart) and any held reading."""
+        attrs: dict[str, Any] = {"previous_volume_ft3": self._previous_volume_ft3}
+        if self._held_drop is not None:
+            attrs["held_drop_volume_ft3"] = self._held_drop[0]
+        return attrs
+
+class OtodataLastDeliverySensor(RestoreSensor):
+    """Time of the most recent delivery (fill), with details as attributes.
+
+    Updated from the tank-filled event the consumption sensor fires, and
+    restored after a restart. Reads only; nothing is written to Otodata.
+    """
+
+    _attr_should_poll = False
+    _DETAIL_KEYS = (
+        "level_before",
+        "level_after",
+        "gallons_added",
+        "price_per_gallon",
+        "estimated_cost",
+    )
+
+    def __init__(self, entry: ConfigEntry, tank_id: str, tank_name: str) -> None:
+        """Initialize the sensor."""
+        self._tank_id = tank_id
+        self._attr_unique_id = f"{entry.entry_id}_last_delivery_{tank_id}"
+        self._attr_name = f"{tank_name} Last Delivery"
+        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        self._attr_icon = "mdi:truck-delivery"
+        self._attr_native_value = None
+        self._details: dict[str, Any] = {}
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last delivery and listen for new ones."""
+        await super().async_added_to_hass()
+
+        last_data = await self.async_get_last_sensor_data()
+        if last_data and isinstance(last_data.native_value, datetime):
+            self._attr_native_value = last_data.native_value
+
+        last_state = await self.async_get_last_state()
+        if last_state:
+            if self._attr_native_value is None:
+                parsed = dt_util.parse_datetime(last_state.state)
+                if parsed is not None:
+                    self._attr_native_value = parsed
+            self._details = {
+                key: last_state.attributes[key]
+                for key in self._DETAIL_KEYS
+                if last_state.attributes.get(key) is not None
+            }
+
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_TANK_FILLED, self._handle_tank_filled)
+        )
+
+    @callback
+    def _handle_tank_filled(self, event) -> None:
+        """Record a delivery reported for this tank."""
+        data = event.data
+        if data.get("tank_id") != self._tank_id:
+            return
+        when = dt_util.parse_datetime(data.get("delivery_time") or "")
+        self._attr_native_value = when or dt_util.utcnow()
+        self._details = {k: data.get(k) for k in self._DETAIL_KEYS}
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the delivery details."""
+        return dict(self._details)
+
 
 class OtodataPropanePriceSensor(CoordinatorEntity, RestoreSensor):
     """Residential propane price from EIA, expressed in USD/ft³.
